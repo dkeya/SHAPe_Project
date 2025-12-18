@@ -1,1 +1,6 @@
-.streamlit/secrets.toml
+.streamlit/secrets.toml.streamlit/secrets.toml.bak*
+__pycache__/
+*.pyc
+shape_data.xlsx
+*.xlsx
+*.xls
