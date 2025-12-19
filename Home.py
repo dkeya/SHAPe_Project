@@ -12,7 +12,7 @@ def main():
     user = require_auth()
     logout_button()
 
-    st.title("🥑 SHAPe Avocado — Enterprise Dashboard")
+    st.title("🥑 SHAPe Avocado Program")
 
     st.markdown(
         """
@@ -30,7 +30,7 @@ Welcome. Use the left sidebar to navigate pages.
 
 ### Pages
 - Monitoring Dashboard
-- Analysis (admin)
+- Analysis
 - Admin (admin)
         """
     )
