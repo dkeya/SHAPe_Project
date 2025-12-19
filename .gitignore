@@ -1,6 +1,11 @@
-.streamlit/secrets.toml.streamlit/secrets.toml.bak*
+.streamlit/secrets.toml
+.streamlit/secrets.toml.bak*
 __pycache__/
 *.pyc
-shape_data.xlsx
+
+# Ignore all Excel files by default
 *.xlsx
 *.xls
+
+# ✅ But allow the default dataset we want shipped with the app
+!shape_data.xlsx
