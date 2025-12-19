@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,17 @@ YIELD_REFERENCE = {
     "4-7": {"fruits": 350, "kg": 58.3},
     "8+": {"fruits": 900, "kg": 150.0},
 }
+
+# -------------------------------------------------------------------
+# Default local path (your request)
+# NOTE:
+# - This will work on your local machine if the file exists there.
+# - On Streamlit Cloud, this path won't exist, so users will still upload normally.
+# - You can override this via:
+#     - env var: SHAPE_DEFAULT_WORKBOOK_PATH
+#     - secrets.toml: [data] default_workbook_path = "..."
+# -------------------------------------------------------------------
+DEFAULT_LOCAL_WORKBOOK_PATH = r"C:\Users\dkeya\Documents\SBS\2025\shape_project\shape_raw_data.xlsx"
 
 
 @dataclass
@@ -58,46 +69,108 @@ def _ensure_df(x) -> pd.DataFrame:
     return x if isinstance(x, pd.DataFrame) else pd.DataFrame()
 
 
+def _read_bytes_from_path(path: str) -> Optional[bytes]:
+    if not path:
+        return None
+    try:
+        if os.path.exists(path) and os.path.isfile(path):
+            with open(path, "rb") as f:
+                b = f.read()
+            return b if b else None
+    except Exception:
+        # Keep loader resilient: if reading fails, just return None and fall through.
+        return None
+    return None
+
+
+def _get_default_path_from_config() -> Optional[str]:
+    # 1) env var override
+    env_path = os.getenv("SHAPE_DEFAULT_WORKBOOK_PATH", "").strip()
+    if env_path:
+        return env_path
+
+    # 2) secrets override (optional)
+    try:
+        data_cfg = st.secrets.get("data", {})  # type: ignore[attr-defined]
+        if isinstance(data_cfg, dict):
+            p = str(data_cfg.get("default_workbook_path", "")).strip()
+            if p:
+                return p
+    except Exception:
+        pass
+
+    # 3) hard-coded local fallback
+    return DEFAULT_LOCAL_WORKBOOK_PATH
+
+
 # -------------------------------------------------------------------
 # Enterprise-grade loader (single source of truth)
 # -------------------------------------------------------------------
-def load_and_prepare_data(uploaded_file=None) -> DataPackage:
+def load_and_prepare_data(uploaded_file=None, use_default_local: bool = True) -> DataPackage:
     """
-    Enterprise-grade loader:
-    - If user uploaded a workbook: use it as the baseline source
-    - Else if a previous upload exists in session_state: reuse it (multipage friendly)
-    - Else fall back to local shape_data.xlsx ONLY if it exists (demo convenience),
-      but the primary workflow is always upload -> transform -> export.
+    Enterprise-grade loader priority:
+    1) If user uploaded a workbook: use it
+    2) Else if a previous upload exists in session_state: reuse it
+    3) Else if use_default_local=True and default path exists: load from that path
+    4) Else fall back to local 'shape_data.xlsx' in project root (demo convenience)
+    5) Else return empty DataPackage with flags
     """
     xlsx_bytes: Optional[bytes] = None
+    source_type = "none"
 
+    # 1) UploadedFile takes highest priority
     if uploaded_file is not None:
-        # Streamlit UploadedFile
-        xlsx_bytes = uploaded_file.getvalue()
-        set_uploaded_workbook_bytes_in_session(xlsx_bytes)
-    else:
-        xlsx_bytes = get_uploaded_workbook_bytes_from_session()
+        try:
+            xlsx_bytes = uploaded_file.getvalue()
+        except Exception:
+            xlsx_bytes = None
 
+        if isinstance(xlsx_bytes, (bytes, bytearray)) and len(xlsx_bytes) > 0:
+            xlsx_bytes = bytes(xlsx_bytes)
+            set_uploaded_workbook_bytes_in_session(xlsx_bytes)
+            source_type = "upload"
+
+    # 2) Session reuse (multipage friendly)
     if xlsx_bytes is None:
-        # Optional fallback for demo / local dev
-        if os.path.exists("shape_data.xlsx"):
-            with open("shape_data.xlsx", "rb") as f:
-                xlsx_bytes = f.read()
-        else:
-            return DataPackage(
-                source_type="none",
-                baseline_df=pd.DataFrame(),
-                sheets={},
-                report={
-                    "rows": 0,
-                    "missing_required": ["exporter"],
-                    "coverage": [],
-                    "mapping_used": {},
-                    "flags": ["No file uploaded."],
-                },
-                workbook_bytes=b"",
-            )
+        xlsx_bytes = get_uploaded_workbook_bytes_from_session()
+        if xlsx_bytes is not None:
+            source_type = "session"
 
+    # 3) Default local file path (your requested behavior)
+    if xlsx_bytes is None and use_default_local:
+        default_path = _get_default_path_from_config()
+        b = _read_bytes_from_path(default_path) if default_path else None
+        if b is not None:
+            xlsx_bytes = b
+            set_uploaded_workbook_bytes_in_session(xlsx_bytes)  # keep multipage consistent
+            source_type = "default_path"
+
+    # 4) Optional fallback for demo / local dev
+    if xlsx_bytes is None:
+        if os.path.exists("shape_data.xlsx"):
+            b = _read_bytes_from_path("shape_data.xlsx")
+            if b is not None:
+                xlsx_bytes = b
+                set_uploaded_workbook_bytes_in_session(xlsx_bytes)
+                source_type = "project_root_shape_data"
+
+    # 5) Nothing found
+    if xlsx_bytes is None:
+        return DataPackage(
+            source_type="none",
+            baseline_df=pd.DataFrame(),
+            sheets={},
+            report={
+                "rows": 0,
+                "missing_required": ["exporter"],
+                "coverage": [],
+                "mapping_used": {},
+                "flags": ["No file uploaded (and no default local workbook found)."],
+            },
+            workbook_bytes=b"",
+        )
+
+    # Transform
     h = _bytes_hash(xlsx_bytes)
     payload = _prepare_cached(xlsx_bytes, h)
 
@@ -111,8 +184,12 @@ def load_and_prepare_data(uploaded_file=None) -> DataPackage:
     workbook_bytes = payload.get("export_workbook_bytes")
     workbook_bytes = workbook_bytes if isinstance(workbook_bytes, (bytes, bytearray)) else b""
 
+    # Ensure source_type is present in report for debugging visibility (optional)
+    report = dict(report)
+    report.setdefault("source_type", source_type)
+
     return DataPackage(
-        source_type=str(payload.get("source_type", "unknown")),
+        source_type=source_type,
         baseline_df=baseline_df,
         sheets=derived_sheets,
         report=report,
@@ -201,7 +278,6 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
             k = cand.lower().strip()
             if k in cols_lower:
                 return cols_lower[k]
-        # exact fallback
         for cand in candidates:
             if cand in df.columns:
                 return cand
@@ -225,14 +301,12 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
             continue
 
         s = df[col]
-        # treat empty strings as missing too
         missing = s.isna() | (s.astype("string").str.strip() == "")
         miss_rate = float(missing.mean() * 100.0) if n else 100.0
         comp_rate = 100.0 - miss_rate
 
         note = ""
         if logical in ("Latitude", "Longitude"):
-            # geo sanity: how many plausible numeric points?
             sn = pd.to_numeric(s, errors="coerce")
             ok = sn.notna().mean() * 100.0
             note = f"Numeric coverage: {ok:.0f}%"
@@ -254,6 +328,5 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
         )
 
     out = pd.DataFrame(rows)
-    # Put most problematic on top
     out = out.sort_values(["Missing (%)", "Field"], ascending=[False, True]).reset_index(drop=True)
     return out
