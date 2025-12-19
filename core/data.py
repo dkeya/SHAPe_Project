@@ -4,11 +4,12 @@ from __future__ import annotations
 import os
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List
+
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-import urllib.request
 
 from core.transforms import load_and_prepare_from_excel_bytes
 
@@ -18,19 +19,6 @@ YIELD_REFERENCE = {
     "4-7": {"fruits": 350, "kg": 58.3},
     "8+": {"fruits": 900, "kg": 150.0},
 }
-
-# -------------------------------------------------------------------
-# Default dataset locations
-# -------------------------------------------------------------------
-# Local dev (your machine only)
-DEFAULT_LOCAL_WORKBOOK_PATH = r"C:\Users\dkeya\Documents\SBS\2025\shape_project\shape_raw_data.xlsx"
-
-# Repo-bundled demo defaults (works in deployed app if committed)
-DEFAULT_REPO_WORKBOOK_PATHS = [
-    os.path.join("data", "shape_raw_data.xlsx"),
-    "shape_raw_data.xlsx",
-    "shape_data.xlsx",
-]
 
 
 @dataclass
@@ -67,139 +55,86 @@ def set_uploaded_workbook_bytes_in_session(xlsx_bytes: bytes):
         st.session_state["shape_workbook_bytes"] = bytes(xlsx_bytes)
 
 
-def clear_uploaded_workbook_bytes_from_session():
-    if "shape_workbook_bytes" in st.session_state:
-        del st.session_state["shape_workbook_bytes"]
-
-
 def _ensure_df(x) -> pd.DataFrame:
     return x if isinstance(x, pd.DataFrame) else pd.DataFrame()
 
 
-def _safe_read_file_bytes(path: str) -> Optional[bytes]:
-    try:
-        if path and os.path.exists(path) and os.path.isfile(path):
-            with open(path, "rb") as f:
-                return f.read()
-    except Exception:
-        return None
+def _repo_root() -> Path:
+    """
+    Best-effort repo root locator.
+    core/data.py is usually: <repo_root>/core/data.py
+    """
+    return Path(__file__).resolve().parents[1]
+
+def _find_default_workbook_path() -> Optional[Path]:
+    """
+    Looks for the default workbook bundled with the app (in the repo).
+    We ONLY support shape_data.xlsx as the auto-load default.
+    """
+    root = _repo_root()
+
+    candidates = [
+        root / "shape_data.xlsx",
+        root / "data" / "shape_data.xlsx",
+    ]
+
+    for p in candidates:
+        if p.exists() and p.is_file():
+            return p
     return None
 
-
-def _download_bytes_from_url(url: str, timeout: int = 25) -> Optional[bytes]:
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except Exception:
-        return None
-
-
-def _get_data_mode() -> str:
-    """
-    Order:
-      1) Session override (admin switch)
-      2) Secrets default
-      3) demo
-    """
-    m = st.session_state.get("shape_data_mode", None)
-    if isinstance(m, str) and m.strip().lower() in {"demo", "production"}:
-        return m.strip().lower()
-
-    try:
-        cfg = st.secrets.get("data", {}) or {}
-        mm = str(cfg.get("mode", "demo")).strip().lower()
-        if mm in {"demo", "production"}:
-            return mm
-    except Exception:
-        pass
-
-    return "demo"
-
-
-def _get_production_url() -> str:
-    """
-    Order:
-      1) Session override (optional)
-      2) Secrets
-    """
-    u = st.session_state.get("shape_production_url", None)
-    if isinstance(u, str) and u.strip():
-        return u.strip()
-
-    try:
-        cfg = st.secrets.get("data", {}) or {}
-        u2 = str(cfg.get("production_url", "")).strip()
-        return u2
-    except Exception:
-        return ""
-
-
-def _get_default_workbook_bytes() -> Tuple[Optional[bytes], str]:
-    """
-    Returns (bytes, source_type)
-    source_type examples:
-      - production_url
-      - demo_file:data/shape_raw_data.xlsx
-      - local_file:C:\\...
-      - none
-    """
-    mode = _get_data_mode()
-
-    # 1) Production (URL in secrets)
-    if mode == "production":
-        prod_url = _get_production_url()
-        if prod_url:
-            b = _download_bytes_from_url(prod_url)
-            if b:
-                return b, "production_url"
-
-    # 2) Demo / repo-bundled file (recommended for public repos)
-    for p in DEFAULT_REPO_WORKBOOK_PATHS:
-        b = _safe_read_file_bytes(p)
-        if b:
-            return b, f"demo_file:{p}"
-
-    # 3) Local dev path (your Windows machine)
-    b = _safe_read_file_bytes(DEFAULT_LOCAL_WORKBOOK_PATH)
-    if b:
-        return b, f"local_file:{DEFAULT_LOCAL_WORKBOOK_PATH}"
-
-    return None, "none"
-
+def _read_bytes_from_path(p: Path) -> bytes:
+    with p.open("rb") as f:
+        return f.read()
 
 # -------------------------------------------------------------------
 # Enterprise-grade loader (single source of truth)
 # -------------------------------------------------------------------
 def load_and_prepare_data(uploaded_file=None) -> DataPackage:
     """
-    Enterprise-grade loader priority:
-      1) If user uploaded a workbook: use it
-      2) Else if a previous upload exists in session_state: reuse it (multipage friendly)
-      3) Else auto-load default:
-          - production_url (if admin set mode=production + secrets url exists)
-          - demo_file from repo paths
-          - local_file Windows path (local dev only)
+    Loader priority (emulates old behavior, but keeps upload option):
+
+    1) If user uploaded a workbook: use it
+    2) Else if a previous upload exists in session_state: reuse it (multipage friendly)
+    3) Else try a default workbook packaged inside the repo (shape_data.xlsx etc.)
+    4) Else return empty package + friendly diagnostics
     """
     xlsx_bytes: Optional[bytes] = None
     source_type: str = "unknown"
 
+    # 1) Upload wins
     if uploaded_file is not None:
         xlsx_bytes = uploaded_file.getvalue()
         set_uploaded_workbook_bytes_in_session(xlsx_bytes)
         source_type = "upload"
-    else:
+
+    # 2) Session cached
+    if xlsx_bytes is None:
         xlsx_bytes = get_uploaded_workbook_bytes_from_session()
         if xlsx_bytes is not None:
-            source_type = "session_upload"
+            source_type = "session"
 
+    # 3) Bundled default file in repo (old behavior)
+    default_path = None
     if xlsx_bytes is None:
-        xlsx_bytes, source_type = _get_default_workbook_bytes()
+        default_path = _find_default_workbook_path()
+        if default_path is not None:
+            xlsx_bytes = _read_bytes_from_path(default_path)
+            source_type = f"bundled:{default_path.name}"
 
+    # 4) Still none → return empty + diagnostics
     if xlsx_bytes is None:
+        looked_in = []
+        root = _repo_root()
+        looked_in.extend(
+            [
+                str(root / "shape_data.xlsx"),
+                str(root / "data" / "shape_data.xlsx"),
+                str(root / "shape_raw_data.xlsx"),
+                str(root / "data" / "shape_raw_data.xlsx"),
+            ]
+        )
+
         return DataPackage(
             source_type="none",
             baseline_df=pd.DataFrame(),
@@ -209,11 +144,16 @@ def load_and_prepare_data(uploaded_file=None) -> DataPackage:
                 "missing_required": ["exporter"],
                 "coverage": [],
                 "mapping_used": {},
-                "flags": ["No file loaded (no upload, no default file, and no production URL)."],
+                "flags": [
+                    "No file uploaded and no bundled default workbook found.",
+                    "To enable auto-load on Streamlit Cloud, commit one of these files into the GitHub repo:",
+                    *[f" - {p}" for p in looked_in],
+                ],
             },
             workbook_bytes=b"",
         )
 
+    # Transform
     h = _bytes_hash(xlsx_bytes)
     payload = _prepare_cached(xlsx_bytes, h)
 
@@ -223,17 +163,13 @@ def load_and_prepare_data(uploaded_file=None) -> DataPackage:
 
     report = payload.get("report")
     report = report if isinstance(report, dict) else {}
+    report.setdefault("rows", int(len(baseline_df)) if isinstance(baseline_df, pd.DataFrame) else 0)
 
     workbook_bytes = payload.get("export_workbook_bytes")
     workbook_bytes = workbook_bytes if isinstance(workbook_bytes, (bytes, bytearray)) else b""
 
-    # Add loader meta
-    report = dict(report)
-    report["source_type"] = source_type
-    report["data_mode"] = _get_data_mode()
-
     return DataPackage(
-        source_type=str(source_type),
+        source_type=str(payload.get("source_type", source_type)),
         baseline_df=baseline_df,
         sheets=derived_sheets,
         report=report,
@@ -281,7 +217,7 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
                 "Detected Column": [""],
                 "Completeness (%)": [0.0],
                 "Missing (%)": [100.0],
-                "Notes": ["Upload a workbook or configure a default dataset to view column coverage."],
+                "Notes": ["Upload a workbook to view column coverage."],
             }
         )
 
@@ -299,7 +235,7 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
         "Trees age 0–3": ["trees_0_3", "2.41 Number of trees for Age class 0-3 years"],
         "Trees age 4–7": ["trees_4_7", "2.42 Number of trees for Age class 4-7 years"],
         "Trees age 8+": ["trees_8_plus", "trees_8p", "2.43 Number of trees for Age class 8+ years"],
-        "GACC approval": ["gacc_approval", "gacc_status", "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status"],
+        "GACC approval": ["gacc_approval", "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status"],
         "Main market outlet": ["main_market_outlet", "5.1 Main Market Outlet"],
         "Hass price (KSh/kg)": ["hass_price_ksh_per_kg", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH)", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH) "],
         "Income (KSh, last season)": ["income_ksh_last_season", "5.3 Total Income from Avocado Sales (KSH last season)"],
@@ -325,13 +261,7 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
         col = pick_col(candidates)
         if not col:
             rows.append(
-                {
-                    "Field": logical,
-                    "Detected Column": "",
-                    "Completeness (%)": 0.0,
-                    "Missing (%)": 100.0,
-                    "Notes": "Not found",
-                }
+                {"Field": logical, "Detected Column": "", "Completeness (%)": 0.0, "Missing (%)": 100.0, "Notes": "Not found"}
             )
             continue
 
@@ -345,7 +275,7 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
             sn = pd.to_numeric(s, errors="coerce")
             ok = sn.notna().mean() * 100.0
             note = f"Numeric coverage: {ok:.0f}%"
-        elif any(x in logical.lower() for x in ["price", "area", "trees", "income"]):
+        elif any(k in logical.lower() for k in ["price", "area", "trees", "income"]):
             sn = pd.to_numeric(s, errors="coerce")
             note = f"Numeric coverage: {(sn.notna().mean()*100.0):.0f}%"
 
@@ -359,5 +289,6 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
             }
         )
 
-    out = pd.DataFrame(rows).sort_values(["Missing (%)", "Field"], ascending=[False, True]).reset_index(drop=True)
+    out = pd.DataFrame(rows)
+    out = out.sort_values(["Missing (%)", "Field"], ascending=[False, True]).reset_index(drop=True)
     return out
