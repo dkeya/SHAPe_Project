@@ -18,7 +18,6 @@ def _norm_col(s: str) -> str:
     s = str(s)
     s = s.replace("’", "'").replace("“", '"').replace("”", '"')
     s = s.strip().lower()
-    # keep slashes for multi-select labels, but normalize spacing/punct
     s = re.sub(r"[\t\r\n]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
@@ -48,6 +47,7 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
         else:
             seen[key] = 0
         cols.append(c2)
+
     out = df.copy()
     out.columns = cols
     return out
@@ -62,19 +62,11 @@ def _read_excel_bytes(xlsx_bytes: bytes) -> Dict[str, pd.DataFrame]:
 
 
 def detect_source_type(sheets: Dict[str, pd.DataFrame]) -> str:
-    """
-    Determine if user uploaded:
-    - "processed": workbook already has Baseline/Metrics etc
-    - "raw": workbook is a raw survey export (often 1 big sheet)
-    """
     if not sheets:
         return "unknown"
-
     sheet_names = {str(s).strip().lower() for s in sheets.keys()}
     if "baseline" in sheet_names:
         return "processed"
-
-    # If there are many sheets but none baseline, we still treat as raw export
     return "raw"
 
 
@@ -98,17 +90,11 @@ def _find_matching_col(df_cols: List[str], synonyms: List[str]) -> Optional[str]
 
 
 def _to_bool_series(s: pd.Series) -> pd.Series:
-    """
-    Normalize messy yes/no or 0/1 checkbox fields into boolean.
-    """
     if s is None:
         return pd.Series(dtype="bool")
-    # numeric checkbox
     num = pd.to_numeric(s, errors="coerce")
     if num.notna().mean() > 0.60:
         return (num.fillna(0) > 0).astype(bool)
-
-    # strings
     st = s.astype("string").fillna("").str.strip().str.lower()
     return st.isin(["yes", "y", "true", "1", "approved", "compliant", "available"])
 
@@ -122,7 +108,6 @@ def _to_str_series(s: pd.Series) -> pd.Series:
 
 
 def _to_datetime_series(s: pd.Series) -> pd.Series:
-    # Try parsing; many survey exports have mixed formats
     return pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
 
 
@@ -153,11 +138,6 @@ def _add_extra_field(
     dtype: str,
     synonyms: List[str],
 ) -> None:
-    """
-    Adds/overrides a canonical field from raw_df using synonyms, only if:
-      - field is missing from out, OR
-      - field exists but is all-NaN
-    """
     if name in out.columns and out[name].notna().any():
         return
 
@@ -181,11 +161,80 @@ def _add_extra_field(
         out[name] = _to_str_series(s)
 
 
+# ----------------------------------------------------------
+# NEW: Derive sub_county from raw one-hot columns (1.4* SubCounty ...)
+# ----------------------------------------------------------
+def _derive_sub_county_from_onehots(raw_df: pd.DataFrame) -> pd.Series:
+    """
+    Raw exports encode sub-county as many one-hot columns, e.g.:
+      '1.4P SubCounty Baringo/Baringo Central'
+      '1.4A Subcounty Meru'
+      '1.4V SubCounty  Vihiga/Hamisi'
+    We return a per-row string (single best label; if multiple selected, join with '; ').
+    """
+    if raw_df is None or raw_df.empty:
+        return pd.Series("", index=pd.Index([]), dtype="string")
+
+    cols = list(raw_df.columns)
+
+    # Match any column that contains "subcounty" (case-insensitive),
+    # and starts with the questionnaire prefix "1.4" (tolerant to spacing/letter codes).
+    sub_cols = []
+    for c in cols:
+        c_str = str(c)
+        c_norm = c_str.lower()
+        if "subcounty" in c_norm and c_norm.strip().startswith("1.4"):
+            sub_cols.append(c_str)
+
+    if not sub_cols:
+        return pd.Series("", index=raw_df.index, dtype="string")
+
+    # Convert to 0/1 selections
+    sub_df = raw_df[sub_cols].copy()
+    for c in sub_cols:
+        sub_df[c] = (pd.to_numeric(sub_df[c], errors="coerce").fillna(0) > 0).astype(int)
+
+    def _label_from_col(colname: str) -> str:
+        # Remove the leading "1.4X SubCounty" part
+        # Examples:
+        #  "1.4P SubCounty Baringo/Baringo Central" -> "Baringo Central"
+        #  "1.4A Subcounty Meru" -> "Meru"
+        s = str(colname)
+
+        # strip duplicate marker if present
+        s = re.sub(r"__dup\d+$", "", s).strip()
+
+        # Remove the leading "1.4<code> SubCounty" tokens
+        s2 = re.sub(r"^1\.4[a-z0-9]*\s*subcounty\s*", "", s, flags=re.IGNORECASE).strip()
+
+        # If label still has a county prefix like "Baringo/Baringo Central", keep the most specific segment
+        if "/" in s2:
+            s2 = s2.split("/")[-1].strip()
+
+        # Final cleanup spacing
+        s2 = re.sub(r"\s+", " ", s2).strip()
+        return s2
+
+    labels = {c: _label_from_col(c) for c in sub_cols}
+
+    def pick_row(row: pd.Series) -> str:
+        picked = [labels[c] for c in sub_cols if int(row.get(c, 0)) == 1 and labels.get(c)]
+        if not picked:
+            return ""
+        # If multiple selected (rare), keep them all (stable + transparent)
+        # but dedupe while preserving order
+        seen = set()
+        out = []
+        for x in picked:
+            if x not in seen:
+                seen.add(x)
+                out.append(x)
+        return "; ".join(out)
+
+    return sub_df.apply(pick_row, axis=1).astype("string")
+
+
 def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]]:
-    """
-    Produce canonical baseline dataframe from a raw dataframe.
-    Returns (canonical_df, used_mapping) where used_mapping is {canonical_field: raw_column_used}.
-    """
     raw_df = clean_column_names(raw_df)
     if raw_df is None or raw_df.empty:
         return pd.DataFrame(), {}
@@ -218,25 +267,31 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
     for f in EXTRA_FIELDS:
         _add_extra_field(raw_df, out, used, f["name"], f["dtype"], f.get("synonyms", []))
 
-    # 3) Derived stability fields
+    # 3) NEW: sub_county derived from raw one-hots if sub_county is missing/empty
+    if ("sub_county" not in out.columns) or (out["sub_county"].astype("string").str.strip().replace("", np.nan).isna().all()):
+        derived_sub = _derive_sub_county_from_onehots(raw_df)
+        if isinstance(derived_sub, pd.Series) and len(derived_sub) == len(out):
+            out["sub_county"] = derived_sub
+            # mark mapping as derived (helps diagnostics)
+            if "sub_county" not in used:
+                used["sub_county"] = "derived:1.4*_SubCounty_onehots"
+
+    # 4) Derived stability fields
     out["trees_per_acre"] = np.nan
     if "trees_total" in out.columns and "area_acres" in out.columns:
         with np.errstate(divide="ignore", invalid="ignore"):
             out["trees_per_acre"] = out["trees_total"] / out["area_acres"]
 
-    # Income per acre
     out["income_per_acre"] = np.nan
     if "income_ksh_last_season" in out.columns and "area_acres" in out.columns:
         with np.errstate(divide="ignore", invalid="ignore"):
             out["income_per_acre"] = out["income_ksh_last_season"] / out["area_acres"]
 
-    # Yield per acre (NEW)
     out["yield_per_acre"] = np.nan
     if "harvest_kg" in out.columns and "area_acres" in out.columns:
         with np.errstate(divide="ignore", invalid="ignore"):
             out["yield_per_acre"] = out["harvest_kg"] / out["area_acres"]
 
-    # Dominant age group
     def _dominant_age(row) -> str:
         a = row.get("trees_0_3", np.nan)
         b = row.get("trees_4_7", np.nan)
@@ -249,19 +304,11 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
 
     out["dominant_age_group"] = out.apply(_dominant_age, axis=1)
 
-    # Clean obvious infinities
     out = out.replace([np.inf, -np.inf], np.nan)
-
     return out, used
 
 
 def extract_training_onehots(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
-    """
-    Detect raw one-hot training need columns like:
-      '8.6 What are your most pressing training/extension needs/<Option>'
-    Convert to canonical columns:
-      training_need__<slug(option)>
-    """
     if raw_df is None or raw_df.empty:
         return pd.DataFrame(index=pd.Index([])), []
 
@@ -283,9 +330,6 @@ def extract_training_onehots(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, List[s
 
 
 def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-    """
-    Create derived sheets from the canonical baseline.
-    """
     d = canonical_df.copy()
     if d is None or d.empty:
         return {
@@ -296,7 +340,6 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
             "Market Summary": pd.DataFrame(),
         }
 
-    # Metrics (make it resilient to optional fields)
     agg_spec = dict(
         Total_Farmers=("exporter", "size"),
         Total_Acres=("area_acres", "sum"),
@@ -317,7 +360,6 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         .rename(columns={"exporter": "Exporter"})
     )
 
-    # Certifications (farm-level view)
     cert_cols = [
         "exporter",
         "farmer_name",
@@ -333,7 +375,6 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     ]
     cert = d[[c for c in cert_cols if c in d.columns]].copy()
 
-    # Training Needs summary: top need per exporter if onehots exist
     onehot_cols = [c for c in d.columns if str(c).startswith("training_need__")]
     if onehot_cols and "exporter" in d.columns:
         sums = d.groupby("exporter")[onehot_cols].sum(numeric_only=True)
@@ -350,7 +391,6 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     else:
         training = pd.DataFrame(columns=["Exporter", "Top_Training_Need"])
 
-    # Market Summary
     market_rows = []
     if "exporter" in d.columns:
         for exp, g in d.groupby("exporter"):
@@ -382,9 +422,6 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 
 def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Return a diagnostics report used to drive data coverage messaging and exec insights.
-    """
     if canonical_df is None or canonical_df.empty:
         return {
             "rows": 0,
@@ -396,16 +433,13 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
 
     d = canonical_df
     rows = int(len(d))
-
     flags = []
 
-    # Required checks
     missing_required = []
     for f in REQUIRED_FOR_STABILITY:
         if f not in d.columns or d[f].isna().all():
             missing_required.append(f)
 
-    # Coverage table
     recommended_fields = list(dict.fromkeys(list(RECOMMENDED_FOR_EXEC) + ["harvest_kg", "yield_per_acre"]))
     cov = []
     for f in recommended_fields:
@@ -423,7 +457,6 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
             }
         )
 
-    # High-level flags
     if "lat" in d.columns and "lon" in d.columns:
         if int(d[["lat", "lon"]].dropna().shape[0]) == 0:
             flags.append("No valid GPS coordinates detected (lat/lon missing).")
@@ -434,7 +467,6 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
     if "submit_date" in d.columns and d["submit_date"].notna().sum() == 0:
         flags.append("No submission/interview dates detected (trend analysis will be limited).")
 
-    # Harvest/yield warning (NEW)
     if "harvest_kg" not in d.columns or d["harvest_kg"].notna().sum() == 0:
         flags.append("Harvest (kg) is missing/empty (yield analytics will be limited).")
 
@@ -448,24 +480,12 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
 
 
 def build_export_workbook_bytes(sheets: Dict[str, pd.DataFrame], report: Dict[str, Any]) -> bytes:
-    """
-    Create a canonical Excel workbook in memory:
-      - Baseline (canonical)
-      - Metrics
-      - Certifications
-      - Training Needs
-      - Market Summary
-      - Data_Quality_Report
-      - Mapping_Used
-    """
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        # Ensure consistent ordering
         for name in ["Baseline", "Metrics", "Certifications", "Training Needs", "Market Summary"]:
             df = sheets.get(name, pd.DataFrame())
             df.to_excel(writer, sheet_name=name[:31], index=False)
 
-        # Data quality report (coverage table)
         cov = pd.DataFrame(report.get("coverage", []))
         cov.to_excel(writer, sheet_name="Data_Quality_Report", index=False)
 
@@ -481,16 +501,10 @@ def build_export_workbook_bytes(sheets: Dict[str, pd.DataFrame], report: Dict[st
 
 
 def load_and_prepare_from_excel_bytes(xlsx_bytes: bytes) -> Dict[str, Any]:
-    """
-    Main pipeline:
-      bytes -> read sheets -> detect type -> canonicalize baseline -> derive sheets -> diagnostics -> export bytes
-    Returns a dict payload.
-    """
     sheets = _read_excel_bytes(xlsx_bytes)
     source_type = detect_source_type(sheets)
 
     if source_type == "processed":
-        # Prefer Baseline sheet, but still canonicalize it
         base_src = None
         for k, v in sheets.items():
             if str(k).strip().lower() == "baseline":
@@ -498,6 +512,7 @@ def load_and_prepare_from_excel_bytes(xlsx_bytes: bytes) -> Dict[str, Any]:
                 break
         if base_src is None:
             base_src = _first_sheet(sheets)
+
         base_src = clean_column_names(base_src)
         canonical_df, used = map_to_canonical(base_src)
 
@@ -513,18 +528,15 @@ def load_and_prepare_from_excel_bytes(xlsx_bytes: bytes) -> Dict[str, Any]:
             "export_workbook_bytes": wb_bytes,
         }
 
-    # raw export
     raw = _first_sheet(sheets)
     raw = clean_column_names(raw)
 
     canonical_df, used = map_to_canonical(raw)
 
-    # training onehots from raw: attach to canonical baseline
-    train_oh, created_cols = extract_training_onehots(raw)
+    train_oh, _ = extract_training_onehots(raw)
     if not train_oh.empty:
         canonical_df = canonical_df.join(train_oh)
 
-    # Derive sheets
     derived = build_derived_sheets(canonical_df)
     report = coverage_diagnostics(canonical_df, used)
     wb_bytes = build_export_workbook_bytes(derived, report)
