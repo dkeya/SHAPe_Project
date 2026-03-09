@@ -68,7 +68,7 @@ def load_users_registry() -> dict:
             "name": "Admin",
             "role": "admin",
             "exporters": ["*"],
-            "password_hash": hash_password("admin123"),
+            "password_hash": hash_password("admin123*"),
         }
     }
 
