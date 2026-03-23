@@ -14,6 +14,7 @@ from core.sections_monitoring import (
     show_training_needs,
     show_investor_income_view,
     show_income_potential_forecast,
+    show_sustainability,  # NEW import
 )
 
 st.set_page_config(page_title="SHAPe Avocado | Monitoring", page_icon="🥑", layout="wide")
@@ -218,6 +219,9 @@ def main():
 
     show_market_analysis(filtered_df)
     show_training_needs(filtered_df)
+    
+    # NEW: Sustainability section
+    show_sustainability(filtered_df)
 
     # -----------------
     # Data explorer (admin only)

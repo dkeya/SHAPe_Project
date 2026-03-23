@@ -30,12 +30,10 @@ class SchemaField:
 # -------------------------------------------------------------------
 # Canonical Monitoring schema
 # -------------------------------------------------------------------
-# Notes:
-# - We keep canonical names short and stable.
-# - synonyms include your known raw question labels + common variants.
-# - Dashboard should read canonical columns only.
 CANONICAL_FIELDS: List[SchemaField] = [
+    # ==========================================================
     # Identity / scope
+    # ==========================================================
     SchemaField(
         name="exporter",
         dtype="string",
@@ -69,7 +67,55 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
+    # ==========================================================
+    # Farmer Profile
+    # ==========================================================
+    SchemaField(
+        name="gender",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "1.11 Gender",
+            "Gender",
+            "gender",
+        ],
+    ),
+    SchemaField(
+        name="age",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "1.12 Age",
+            "Age",
+            "age",
+        ],
+    ),
+    SchemaField(
+        name="education",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "1.13 Formal education level",
+            "Formal education level",
+            "Education Level",
+            "education",
+        ],
+    ),
+    SchemaField(
+        name="experience",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "1.14 Experience in Avocado farming in years",
+            "Experience in Avocado farming in years",
+            "Farming Experience",
+            "experience",
+        ],
+    ),
+
+    # ==========================================================
     # Geography
+    # ==========================================================
     SchemaField(
         name="county",
         dtype="string",
@@ -123,7 +169,23 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
+    # ==========================================================
+    # Legal Registration
+    # ==========================================================
+    SchemaField(
+        name="orchard_group",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "1.24 Is this orchard registered as part of a Group",
+            "Orchard Group Registration",
+            "Group Registration",
+        ],
+    ),
+
+    # ==========================================================
     # Scale
+    # ==========================================================
     SchemaField(
         name="area_acres",
         dtype="float",
@@ -145,20 +207,9 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
-    # ✅ NEW: Production (for yield_per_acre and analytics models)
-    SchemaField(
-        name="harvest_kg",
-        dtype="float",
-        required=False,
-        synonyms=[
-            "4.2 Total Harvest Last Season (kg)",
-            "Total Harvest Last Season (kg)",
-            "Harvest (kg)",
-            "harvest_kg",
-        ],
-    ),
-
+    # ==========================================================
     # Age portfolio (tree counts)
+    # ==========================================================
     SchemaField(
         name="trees_0_3",
         dtype="float",
@@ -187,7 +238,9 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
+    # ==========================================================
     # Fruits per tree (yield proxy)
+    # ==========================================================
     SchemaField(
         name="fruits_per_tree_0_3",
         dtype="float",
@@ -216,7 +269,113 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
-    # Certifications / compliance
+    # ==========================================================
+    # Production (harvest & losses)
+    # ==========================================================
+    SchemaField(
+        name="harvest_kg",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "4.2 Total Harvest Last Season (kg)",
+            "Total Harvest Last Season (kg)",
+            "Harvest Last Season (kg)",
+            "Total Harvest (kg)",
+            "Harvest (kg)",
+            "harvest_kg",
+        ],
+    ),
+    SchemaField(
+        name="harvest_losses_kg",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "4.3 Avocado Losses last season (kg)",
+            "Avocado Losses (kg)",
+            "Losses (kg)",
+        ],
+    ),
+    SchemaField(
+        name="loss_causes",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "4.31 Primary Cause of Loss last season",
+            "Primary Cause of Loss",
+        ],
+    ),
+
+    # ==========================================================
+    # Production Practices
+    # ==========================================================
+    SchemaField(
+        name="fertilizer_organic",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.3 Type of Fertilizer Used/Organic",
+            "Organic Fertilizer",
+        ],
+    ),
+    SchemaField(
+        name="fertilizer_inorganic",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.3 Type of Fertilizer Used/Inorganic",
+            "Inorganic Fertilizer",
+        ],
+    ),
+    SchemaField(
+        name="fertilizer_quantity",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "3.312 Provide the annual quantity of Solid Organic Fertilizer used per tree (in kgs)",
+            "3.314 Provide the annual quantity of Solid Inorganic Fertilizer used per tree (in kgs)",
+            "Fertilizer Quantity (kg/tree)",
+        ],
+    ),
+    SchemaField(
+        name="soil_conservation",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "3.4 Soil Conservation Measures Applied",
+            "Soil Conservation",
+        ],
+    ),
+    SchemaField(
+        name="irrigation_drip",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.5 Irrigation Practices/Drip",
+            "Drip Irrigation",
+        ],
+    ),
+    SchemaField(
+        name="irrigation_sprinkler",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.5 Irrigation Practices/Sprinkler",
+            "Sprinkler Irrigation",
+        ],
+    ),
+    SchemaField(
+        name="irrigation_rainfed",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.5 Irrigation Practices/Rainfed",
+            "Rainfed",
+        ],
+    ),
+
+    # ==========================================================
+    # Compliance & Certifications
+    # ==========================================================
     SchemaField(
         name="gacc_status",
         dtype="bool",
@@ -246,6 +405,15 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
     SchemaField(
+        name="sanitation_tools",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "6.4 Use of Clean Harvesting Tools",
+            "Clean Harvesting Tools",
+        ],
+    ),
+    SchemaField(
         name="pest_monitoring",
         dtype="bool",
         required=False,
@@ -263,8 +431,24 @@ CANONICAL_FIELDS: List[SchemaField] = [
             "Use of Approved Pesticides Only",
         ],
     ),
-
-    # Certification types (checkbox style)
+    SchemaField(
+        name="ipm_use",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.8 Is an Integrated Pest Management (IPM) program implemented?",
+            "IPM Implemented",
+        ],
+    ),
+    SchemaField(
+        name="biological_control",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.83 Biological Control",
+            "Biological Control",
+        ],
+    ),
     SchemaField(
         name="cert_globalgap",
         dtype="bool",
@@ -294,7 +478,9 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
 
-    # Market & income
+    # ==========================================================
+    # Market & Income
+    # ==========================================================
     SchemaField(
         name="market_outlet",
         dtype="string",
@@ -314,6 +500,33 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
     SchemaField(
+        name="hass_price_current_ksh_per_kg",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "5.6 Average Selling Price of (Hass variety) per kg this Season (KSH)",
+            "Current Hass price per kg",
+        ],
+    ),
+    SchemaField(
+        name="grade1_share_last",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "5.4 What proportion of your harvest did you sell as Grade 1 last season (%)?",
+            "Grade 1 Share Last Season",
+        ],
+    ),
+    SchemaField(
+        name="grade1_share_current",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "5.8 What proportion of your harvest did you sell as Grade 1 this season (%)?",
+            "Grade 1 Share Current Season",
+        ],
+    ),
+    SchemaField(
         name="income_ksh_last_season",
         dtype="float",
         required=False,
@@ -322,8 +535,118 @@ CANONICAL_FIELDS: List[SchemaField] = [
             "Income from avocado sales (last season)",
         ],
     ),
+    SchemaField(
+        name="market_constraints",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "5.10 Challenges in Market Access",
+            "Market Access Challenges",
+        ],
+    ),
 
+    # ==========================================================
+    # Training & Extension
+    # ==========================================================
+    SchemaField(
+        name="sps_training",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "6.1 Training on SPS & Compliance Received",
+            "SPS Training Received",
+        ],
+    ),
+    SchemaField(
+        name="training_provider",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "8.3 Who provided the training",
+            "Training Provider",
+        ],
+    ),
+    SchemaField(
+        name="record_keeping",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "6.3 Record-Keeping Practices",
+            "Record Keeping",
+        ],
+    ),
+    SchemaField(
+        name="extension_access",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "8.4 Extension Services Accessed",
+            "Extension Services",
+        ],
+    ),
+    SchemaField(
+        name="training_needs_text",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "8.6 What are your most pressing training/extension needs",
+            "Training Needs",
+            "Suggestions for the Shape Program Improvement",
+        ],
+    ),
+
+    # ==========================================================
+    # Sustainability
+    # ==========================================================
+    SchemaField(
+        name="water_source",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "7.1 Water Source for Irrigation",
+            "Water Source",
+        ],
+    ),
+    SchemaField(
+        name="waste_management",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "7.2 Waste Management Practices",
+            "Waste Management",
+        ],
+    ),
+    SchemaField(
+        name="biodiversity",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "7.3 Biodiversity Conservation Practices",
+            "Biodiversity Practices",
+        ],
+    ),
+    SchemaField(
+        name="additional_trees",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "7.4 What other trees are planted around/within the orchard",
+            "Other Trees Planted",
+        ],
+    ),
+    SchemaField(
+        name="other_value_chains",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "7.5 What other value chains is the farmer involved in",
+            "Other Value Chains",
+        ],
+    ),
+
+    # ==========================================================
     # Dates
+    # ==========================================================
     SchemaField(
         name="submit_date",
         dtype="datetime",
@@ -346,20 +669,77 @@ REQUIRED_FOR_STABILITY = [
 ]
 
 RECOMMENDED_FOR_EXEC = [
+    # Identity
+    "exporter",
+    "farmer_name",
+    "orchard_name",
+    # Farmer Profile
+    "gender",
+    "age",
+    "education",
+    "experience",
+    # Geography
     "county",
     "sub_county",
     "ward",
     "lat",
     "lon",
+    # Scale
     "area_acres",
     "trees_total",
-    "harvest_kg",  # ✅ NEW: recommended for yield analytics
+    # Age portfolio
     "trees_0_3",
     "trees_4_7",
     "trees_8_plus",
+    # Fruits per tree
+    "fruits_per_tree_0_3",
+    "fruits_per_tree_4_7",
+    "fruits_per_tree_8_plus",
+    # Production
+    "harvest_kg",
+    "harvest_losses_kg",
+    "loss_causes",
+    # Production Practices
+    "fertilizer_organic",
+    "fertilizer_inorganic",
+    "soil_conservation",
+    "irrigation_drip",
+    "irrigation_sprinkler",
+    "irrigation_rainfed",
+    # Compliance
+    "gacc_status",
+    "kephis_status",
+    "sanitation_record",
+    "sanitation_tools",
+    "pest_monitoring",
+    "approved_pesticides",
+    "ipm_use",
+    "biological_control",
+    # Certifications
+    "cert_globalgap",
+    "cert_organic",
+    "cert_fairtrade",
+    # Market
     "market_outlet",
     "hass_price_ksh_per_kg",
+    "hass_price_current_ksh_per_kg",
+    "grade1_share_last",
+    "grade1_share_current",
     "income_ksh_last_season",
+    "market_constraints",
+    # Training
+    "sps_training",
+    "training_provider",
+    "record_keeping",
+    "extension_access",
+    "training_needs_text",
+    # Sustainability
+    "water_source",
+    "waste_management",
+    "biodiversity",
+    "additional_trees",
+    "other_value_chains",
+    # Date
     "submit_date",
 ]
 

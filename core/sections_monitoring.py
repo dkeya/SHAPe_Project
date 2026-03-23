@@ -42,8 +42,11 @@ CAN = {
     "cert_fairtrade": "cert_fairtrade",
     "market_outlet": "market_outlet",
     "price_hass": "hass_price_ksh_per_kg",
+    "price_hass_current": "hass_price_current_ksh_per_kg",  # NEW
     "income_last": "income_ksh_last_season",
     "income_per_acre": "income_per_acre",
+    "grade1_share_last": "grade1_share_last_season",  # NEW
+    "grade1_share_current": "grade1_share_current_season",  # NEW
     "trees_0_3": "trees_0_3",
     "trees_4_7": "trees_4_7",
     "trees_8_plus": "trees_8_plus",
@@ -51,6 +54,39 @@ CAN = {
     "fruits_4_7": "fruits_per_tree_4_7",
     "fruits_8_plus": "fruits_per_tree_8_plus",
     "dominant_age": "dominant_age_group",
+    # NEW: Farmer profile
+    "gender": "gender",
+    "age": "age",
+    "education": "education_level",
+    "experience": "farming_experience_years",
+    # NEW: Legal registration
+    "orchard_group": "orchard_group_registered",
+    # NEW: Production practices
+    "fertilizer_organic": "fertilizer_organic",
+    "fertilizer_inorganic": "fertilizer_inorganic",
+    "fertilizer_quantity": "fertilizer_quantity_kg_per_tree",
+    "soil_conservation": "soil_conservation_practices",
+    "irrigation_drip": "irrigation_drip",
+    "irrigation_sprinkler": "irrigation_sprinkler",
+    "irrigation_rainfed": "irrigation_rainfed",
+    # NEW: Compliance
+    "sps_training": "sps_training_received",
+    "training_last_year": "training_last_year",
+    "training_last_6months": "training_last_6months",
+    "training_provider": "training_provider",
+    "record_keeping": "record_keeping_practices",
+    "ipm_use": "ipm_implemented",
+    "pesticide_use": "pesticide_use_details",
+    "biological_control": "biological_control_used",
+    # NEW: Sustainability
+    "water_source": "irrigation_water_source",
+    "waste_management": "waste_management_practice",
+    "biodiversity": "biodiversity_practices",
+    "additional_trees": "additional_trees_planted",
+    "other_value_chains": "other_value_chains",
+    # NEW: Extension
+    "extension_access": "extension_services_access",
+    "training_needs_text": "training_needs_text",
 }
 
 
@@ -72,7 +108,6 @@ def _safe_bool(df: pd.DataFrame, col: str) -> pd.Series:
     s = df[col]
     if s.dtype == bool:
         return s.fillna(False)
-    # allow 0/1
     num = pd.to_numeric(s, errors="coerce")
     if num.notna().mean() > 0.60:
         return (num.fillna(0) > 0).astype(bool)
@@ -82,6 +117,18 @@ def _safe_bool(df: pd.DataFrame, col: str) -> pd.Series:
 
 def _clip_inf(df: pd.DataFrame) -> pd.DataFrame:
     return df.replace([np.inf, -np.inf], np.nan)
+
+
+def classify_farm_size(acres: float) -> str:
+    """Classify farm size based on acres."""
+    if pd.isna(acres):
+        return "Unknown"
+    if acres <= 3:
+        return "Micro-Small"
+    elif acres <= 10:
+        return "Medium"
+    else:
+        return "Large"
 
 
 def _yield_reference():
@@ -104,7 +151,9 @@ def _ensure_derived(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     # numeric coercions for key fields
     for c in [CAN["lat"], CAN["lon"], CAN["area"], CAN["trees"], CAN["trees_per_acre"], CAN["income_last"], CAN["income_per_acre"],
-              CAN["trees_0_3"], CAN["trees_4_7"], CAN["trees_8_plus"], CAN["fruits_0_3"], CAN["fruits_4_7"], CAN["fruits_8_plus"], CAN["price_hass"]]:
+              CAN["trees_0_3"], CAN["trees_4_7"], CAN["trees_8_plus"], CAN["fruits_0_3"], CAN["fruits_4_7"], CAN["fruits_8_plus"], 
+              CAN["price_hass"], CAN["price_hass_current"], CAN["grade1_share_last"], CAN["grade1_share_current"],
+              CAN["age"], CAN["experience"]]:
         if c in d.columns:
             d[c] = pd.to_numeric(d[c], errors="coerce")
 
@@ -178,7 +227,6 @@ def create_certification_chart(df: pd.DataFrame):
     d = _ensure_derived(df)
     cert_data = []
 
-    # checkbox-like certs
     for label, col in [
         ("GlobalGAP", CAN["cert_globalgap"]),
         ("Organic", CAN["cert_organic"]),
@@ -188,7 +236,6 @@ def create_certification_chart(df: pd.DataFrame):
             count = int(_safe_bool(d, col).sum())
             cert_data.append({"Certification": label, "Count": count})
 
-    # yes/no gacc
     if CAN["gacc"] in d.columns:
         cert_data.append({"Certification": "China (GACC)", "Count": int(_safe_bool(d, CAN["gacc"]).sum())})
 
@@ -271,7 +318,7 @@ def create_wordcloud(text: str, title: str):
 
 
 # ==========================================================
-# Executive auto-insights (Monitoring page uses this)
+# Executive auto-insights
 # ==========================================================
 def executive_insights(df: pd.DataFrame) -> dict:
     d = _ensure_derived(df)
@@ -299,6 +346,12 @@ def executive_insights(df: pd.DataFrame) -> dict:
     else:
         risks.append("GPS mapping is unavailable (lat/lon missing).")
         actions.append("Ensure GPS capture is enabled and consistently collected in field surveys.")
+
+    # Gender distribution
+    if CAN["gender"] in d.columns:
+        female = int(_safe_str(d, CAN["gender"]).str.lower().eq("female").sum())
+        if female > 0:
+            insights.append(f"Female farmers represent {female}/{n} ({female/n*100:.0f}%) of participants.")
 
     # Market
     if CAN["market_outlet"] in d.columns:
@@ -335,9 +388,11 @@ def executive_insights(df: pd.DataFrame) -> dict:
 # Dashboard sections
 # ==========================================================
 def show_overview(df: pd.DataFrame, metrics_df: pd.DataFrame | None = None):
+    """Enhanced overview with farmer profile metrics."""
     st.subheader("Program Overview")
     d = _ensure_derived(df)
 
+    # First row: core metrics
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Farmers", int(len(d)))
 
@@ -350,6 +405,70 @@ def show_overview(df: pd.DataFrame, metrics_df: pd.DataFrame | None = None):
     china_ok = int(_safe_bool(d, CAN["gacc"]).sum()) if CAN["gacc"] in d.columns else 0
     c4.metric("China-Approved Farms (GACC)", china_ok)
 
+    # Second row: farmer profile metrics
+    st.markdown("---")
+    st.markdown("**👥 Farmer Profile**")
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if CAN["gender"] in d.columns:
+            gender_series = _safe_str(d, CAN["gender"]).str.lower()
+            female = int(gender_series.eq("female").sum())
+            male = int(gender_series.eq("male").sum())
+            st.metric("👩 Female Farmers", f"{female} ({female/len(d)*100:.0f}%)" if len(d) > 0 else "N/A")
+        else:
+            st.caption("Gender data not available")
+
+    with col2:
+        if CAN["age"] in d.columns:
+            ages = _safe_num(d, CAN["age"]).dropna()
+            avg_age = ages.mean()
+            st.metric("📊 Avg. Farmer Age", f"{avg_age:.0f} years" if not pd.isna(avg_age) else "N/A")
+        else:
+            st.caption("Age data not available")
+
+    with col3:
+        if CAN["education"] in d.columns:
+            edu = _safe_str(d, CAN["education"])
+            edu_counts = edu[edu != ""].value_counts()
+            if not edu_counts.empty:
+                top_edu = edu_counts.index[0]
+                st.metric("🎓 Most Common Education", top_edu[:20])
+            else:
+                st.caption("Education data not available")
+        else:
+            st.caption("Education data not available")
+
+    with col4:
+        if CAN["experience"] in d.columns:
+            exp_years = _safe_num(d, CAN["experience"]).dropna()
+            avg_exp = exp_years.mean()
+            st.metric("🌱 Avg. Experience", f"{avg_exp:.1f} years" if not pd.isna(avg_exp) else "N/A")
+        else:
+            st.caption("Experience data not available")
+
+    # Third row: farm size classification
+    st.markdown("---")
+    st.markdown("**🏠 Farm Size Classification**")
+    col1, col2, col3, col4 = st.columns(4)
+
+    if CAN["area"] in d.columns:
+        acres = _safe_num(d, CAN["area"])
+        micro_small = sum(acres <= 3)
+        medium = sum((acres > 3) & (acres <= 10))
+        large = sum(acres > 10)
+        
+        col1.metric("🏡 Micro-Small (≤3 acres)", f"{micro_small} ({micro_small/len(d)*100:.0f}%)")
+        col2.metric("🏠 Medium (4-10 acres)", f"{medium} ({medium/len(d)*100:.0f}%)")
+        col3.metric("🏢 Large (>10 acres)", f"{large} ({large/len(d)*100:.0f}%)")
+        
+        # Orchard group registration
+        if CAN["orchard_group"] in d.columns:
+            group_reg = int(_safe_bool(d, CAN["orchard_group"]).sum())
+            col4.metric("🤝 Registered in Farmer Group", f"{group_reg} ({group_reg/len(d)*100:.0f}%)")
+    else:
+        st.caption("Farm size data not available for classification")
+
 
 def show_geospatial(df: pd.DataFrame):
     st.subheader("Farm Locations")
@@ -361,7 +480,8 @@ def show_geospatial(df: pd.DataFrame):
 
 
 def show_certification(df: pd.DataFrame):
-    st.subheader("Certification Status")
+    """Enhanced certification with compliance details."""
+    st.subheader("Certification & Compliance Status")
 
     col1, col2 = st.columns(2)
 
@@ -373,7 +493,7 @@ def show_certification(df: pd.DataFrame):
             st.warning("No certification/compliance data available in this dataset.")
 
     with col2:
-        st.markdown("**China Market Requirements Checklist**")
+        st.markdown("**🇨🇳 China Market Requirements Checklist**")
 
         checks = [
             ("KEPHIS registration", CAN["kephis"]),
@@ -394,11 +514,51 @@ def show_certification(df: pd.DataFrame):
             compliant = int(_safe_bool(d, col).sum())
             st.progress(compliant / n, text=f"{label}: {compliant}/{n} farms")
 
+    # Expandable compliance details
+    with st.expander("📋 Detailed Compliance Metrics"):
+        d = _ensure_derived(df)
+        
+        # SPS Training
+        if CAN["sps_training"] in d.columns:
+            sps_trained = int(_safe_bool(d, CAN["sps_training"]).sum())
+            st.metric("SPS Training Received", f"{sps_trained}/{len(d)} farms ({sps_trained/len(d)*100:.0f}%)")
+        
+        # Training in last year
+        if CAN["training_last_year"] in d.columns:
+            trained_last_year = int(_safe_bool(d, CAN["training_last_year"]).sum())
+            st.metric("Trained in Last Year", f"{trained_last_year} farms")
+        
+        # Training provider
+        if CAN["training_provider"] in d.columns:
+            provider = _safe_str(d, CAN["training_provider"])
+            provider = provider[provider != ""]
+            if not provider.empty:
+                st.markdown("**Training Providers:**")
+                provider_counts = provider.value_counts().head(3)
+                for prov, count in provider_counts.items():
+                    st.write(f"- {prov}: {count} farms")
+        
+        # Record keeping
+        if CAN["record_keeping"] in d.columns:
+            record_keepers = int(_safe_bool(d, CAN["record_keeping"]).sum())
+            st.metric("Maintain Farm Records", f"{record_keepers} farms")
+        
+        # IPM implementation
+        if CAN["ipm_use"] in d.columns:
+            ipm_users = int(_safe_bool(d, CAN["ipm_use"]).sum())
+            st.metric("IPM Implemented", f"{ipm_users}/{len(d)} farms ({ipm_users/len(d)*100:.0f}%)")
+        
+        # Biological control
+        if CAN["biological_control"] in d.columns:
+            bio_users = int(_safe_bool(d, CAN["biological_control"]).sum())
+            st.metric("Biological Control Used", f"{bio_users} farms")
+
 
 def show_production_metrics(df: pd.DataFrame):
+    """Enhanced production metrics with detailed inputs."""
     st.subheader("Production Metrics")
 
-    tab1, tab2, tab3 = st.tabs(["Yields", "Inputs", "Losses"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Yields", "Inputs", "Losses", "Productivity Analysis"])
 
     with tab1:
         chart = create_yield_comparison_chart(df)
@@ -408,104 +568,353 @@ def show_production_metrics(df: pd.DataFrame):
             st.warning("No fruits-per-tree yield fields detected in the canonical schema.")
 
     with tab2:
-        st.info("Inputs visuals can be enabled once input columns are defined in the canonical schema (fertilizer, irrigation, IPM, etc.).")
+        d = _ensure_derived(df)
+        st.markdown("**Fertilizer Usage**")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if CAN["fertilizer_organic"] in d.columns:
+                organic = int(_safe_bool(d, CAN["fertilizer_organic"]).sum())
+                st.metric("Organic Fertilizer Users", f"{organic} farms")
+            else:
+                st.caption("Organic fertilizer data not available")
+        
+        with col2:
+            if CAN["fertilizer_inorganic"] in d.columns:
+                inorganic = int(_safe_bool(d, CAN["fertilizer_inorganic"]).sum())
+                st.metric("Inorganic Fertilizer Users", f"{inorganic} farms")
+        
+        # Fertilizer quantity
+        if CAN["fertilizer_quantity"] in d.columns:
+            fert_qty = _safe_num(d, CAN["fertilizer_quantity"]).dropna()
+            if not fert_qty.empty:
+                st.metric("Avg. Fertilizer (kg/tree/year)", f"{fert_qty.mean():.1f}")
+        
+        st.markdown("---")
+        st.markdown("**Soil Conservation Measures**")
+        
+        if CAN["soil_conservation"] in d.columns:
+            soil_practices = _safe_str(d, CAN["soil_conservation"])
+            soil_practices = soil_practices[soil_practices != ""]
+            if not soil_practices.empty:
+                practices = soil_practices.str.split(',').explode().str.strip()
+                practices = practices[practices != ""]
+                practice_counts = practices.value_counts()
+                for practice, count in practice_counts.head(4).items():
+                    st.write(f"- {practice}: {count} farms")
+        else:
+            st.caption("Soil conservation data not available")
+        
+        st.markdown("---")
+        st.markdown("**Irrigation Methods**")
+        
+        irrigation_data = []
+        if CAN["irrigation_drip"] in d.columns:
+            irrigation_data.append(("Drip", int(_safe_bool(d, CAN["irrigation_drip"]).sum())))
+        if CAN["irrigation_sprinkler"] in d.columns:
+            irrigation_data.append(("Sprinkler", int(_safe_bool(d, CAN["irrigation_sprinkler"]).sum())))
+        if CAN["irrigation_rainfed"] in d.columns:
+            irrigation_data.append(("Rainfed", int(_safe_bool(d, CAN["irrigation_rainfed"]).sum())))
+        
+        if irrigation_data:
+            irr_df = pd.DataFrame(irrigation_data, columns=["Method", "Count"])
+            chart = alt.Chart(irr_df).mark_bar().encode(
+                x="Method:N", y="Count:Q", color="Method:N"
+            ).properties(height=300)
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.caption("Irrigation data not available")
 
     with tab3:
         st.caption("Loss analysis can be expanded once loss fields are mapped into the canonical schema (post-harvest loss %, key reasons, etc.).")
 
+    with tab4:
+        d = _ensure_derived(df)
+        st.markdown("**📈 Productivity Analysis**")
+        
+        # Hass variety adoption
+        if "variety_hass" in d.columns:
+            hass_count = int(_safe_bool(d, "variety_hass").sum())
+            st.metric("Hass Variety Farmers", f"{hass_count}/{len(d)} ({hass_count/len(d)*100:.0f}%)")
+        
+        # Total harvest
+        if CAN["income_last"] in d.columns:
+            total_income = _safe_num(d, CAN["income_last"]).sum()
+            avg_income = _safe_num(d, CAN["income_last"]).mean()
+            st.metric("Total Avocado Income (Last Season)", f"KSh {total_income:,.0f}")
+            st.metric("Avg Income per Farm", f"KSh {avg_income:,.0f}")
+
 
 def show_market_analysis(df: pd.DataFrame):
+    """Enhanced market analysis with grade share and current prices."""
     st.subheader("Market Analysis")
     d = _ensure_derived(df)
 
-    if CAN["market_outlet"] not in d.columns:
-        st.warning("Market outlet field is not available in this upload.")
-        return
+    col1, col2 = st.columns(2)
 
-    counts = _safe_str(d, CAN["market_outlet"])
-    counts = counts[counts != ""]
-    if counts.empty:
-        st.warning("Market outlet exists, but values appear empty.")
-        return
+    with col1:
+        if CAN["market_outlet"] in d.columns:
+            counts = _safe_str(d, CAN["market_outlet"])
+            counts = counts[counts != ""]
+            if not counts.empty:
+                market_counts = counts.value_counts().reset_index()
+                market_counts.columns = ["Outlet", "Count"]
 
-    market_counts = counts.value_counts().reset_index()
-    market_counts.columns = ["Outlet", "Count"]
+                chart = (
+                    alt.Chart(market_counts)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Count:Q", title="Count"),
+                        y=alt.Y("Outlet:N", sort="-x", title="Outlet"),
+                        color="Outlet:N",
+                        tooltip=["Outlet", "Count"],
+                    )
+                    .properties(title="Main Market Outlets", height=380)
+                )
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.warning("Market outlet exists, but values appear empty.")
+        else:
+            st.warning("Market outlet field is not available in this upload.")
 
-    chart = (
-        alt.Chart(market_counts)
-        .mark_bar()
-        .encode(
-            x=alt.X("Count:Q", title="Count"),
-            y=alt.Y("Outlet:N", sort="-x", title="Outlet"),
-            color="Outlet:N",
-            tooltip=["Outlet", "Count"],
-        )
-        .properties(title="Main Market Outlets", height=380)
-    )
-    st.altair_chart(chart, use_container_width=True)
+    with col2:
+        st.markdown("**Grade 1 Share**")
+        
+        if CAN["grade1_share_last"] in d.columns:
+            grade_share = _safe_num(d, CAN["grade1_share_last"]).dropna()
+            if not grade_share.empty:
+                st.metric("Avg. Grade 1 Share (Last Season)", f"{grade_share.mean():.1f}%")
+                
+                # Grade distribution chart
+                grade_data = grade_share
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.hist(grade_data, bins=20, color='#2ecc71', edgecolor='black')
+                ax.set_xlabel('Grade 1 Share (%)')
+                ax.set_ylabel('Number of Farmers')
+                ax.set_title('Distribution of Grade 1 Share')
+                st.pyplot(fig)
+        else:
+            st.caption("Grade 1 share data not available")
+    
+    st.markdown("---")
+    
+    # Price comparison: last season vs current season
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        st.markdown("**💰 Hass Prices (Last Season)**")
+        if CAN["price_hass"] in d.columns:
+            prices = _safe_num(d, CAN["price_hass"]).dropna()
+            prices = prices[prices <= 120]  # Remove outliers
+            if not prices.empty:
+                st.metric("Average Price", f"KSh {prices.mean():.2f}/kg")
+                st.metric("Median Price", f"KSh {prices.median():.2f}/kg")
+            else:
+                st.caption("Price data not available")
+        else:
+            st.caption("Price data not available")
+    
+    with col4:
+        st.markdown("**💰 Hass Prices (Current Season)**")
+        if CAN["price_hass_current"] in d.columns:
+            current_prices = _safe_num(d, CAN["price_hass_current"]).dropna()
+            current_prices = current_prices[current_prices <= 120]
+            if not current_prices.empty:
+                st.metric("Average Price", f"KSh {current_prices.mean():.2f}/kg")
+                st.metric("Median Price", f"KSh {current_prices.median():.2f}/kg")
+            else:
+                st.caption("Current season price data not available")
+        else:
+            st.caption("Current season price data not available")
 
 
 def show_training_needs(df: pd.DataFrame):
+    """Enhanced training needs with extension access."""
     st.subheader("Training & Extension Needs")
     d = _ensure_derived(df)
 
-    # Option A: already summarized (canonical export sheet may carry this if you later add it)
-    if "Top_Training_Need" in d.columns:
-        s = _safe_str(d, "Top_Training_Need")
-        s = s[s != ""]
-        if s.empty:
-            st.warning("Training needs column exists but values are empty.")
-            return
-        c = s.value_counts().reset_index()
-        c.columns = ["Need", "Count"]
-        chart = (
-            alt.Chart(c)
-            .mark_bar()
-            .encode(
-                x=alt.X("Count:Q", title="Count"),
-                y=alt.Y("Need:N", sort="-x"),
-                color="Need:N",
-                tooltip=["Need", "Count"],
-            )
-            .properties(title="Most Pressing Training Needs", height=380)
-        )
-        st.altair_chart(chart, use_container_width=True)
-        return
+    col1, col2 = st.columns(2)
 
-    # Option B: canonical one-hots derived from raw
-    onehot_cols = [c for c in d.columns if str(c).startswith("training_need__")]
-    if not onehot_cols:
-        st.warning("Training needs fields are not available in this upload.")
-        return
+    with col1:
+        # Option A: already summarized (canonical export sheet may carry this)
+        if "Top_Training_Need" in d.columns:
+            s = _safe_str(d, "Top_Training_Need")
+            s = s[s != ""]
+            if not s.empty:
+                c = s.value_counts().reset_index()
+                c.columns = ["Need", "Count"]
+                chart = (
+                    alt.Chart(c)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Count:Q", title="Count"),
+                        y=alt.Y("Need:N", sort="-x"),
+                        color="Need:N",
+                        tooltip=["Need", "Count"],
+                    )
+                    .properties(title="Most Pressing Training Needs", height=380)
+                )
+                st.altair_chart(chart, use_container_width=True)
+                return
 
-    rows = []
-    for c in onehot_cols:
-        label = str(c).replace("training_need__", "").replace("_", " ").title()
-        cnt = int(pd.to_numeric(d[c], errors="coerce").fillna(0).sum())
-        if cnt > 0:
-            rows.append({"Need": label, "Count": cnt})
+        # Option B: canonical one-hots derived from raw
+        onehot_cols = [c for c in d.columns if str(c).startswith("training_need__")]
+        if not onehot_cols:
+            st.warning("Training needs fields are not available in this upload.")
+        else:
+            rows = []
+            for c in onehot_cols:
+                label = str(c).replace("training_need__", "").replace("_", " ").title()
+                cnt = int(pd.to_numeric(d[c], errors="coerce").fillna(0).sum())
+                if cnt > 0:
+                    rows.append({"Need": label, "Count": cnt})
 
-    if not rows:
-        st.info("Training needs fields exist, but no selections were detected (all zeros).")
-        return
+            if rows:
+                out = pd.DataFrame(rows).sort_values("Count", ascending=False)
+                chart = (
+                    alt.Chart(out)
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("Count:Q", title="Count"),
+                        y=alt.Y("Need:N", sort="-x"),
+                        color="Need:N",
+                        tooltip=["Need", "Count"],
+                    )
+                    .properties(title="Most Pressing Training Needs", height=380)
+                )
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.info("Training needs fields exist, but no selections were detected (all zeros).")
 
-    out = pd.DataFrame(rows).sort_values("Count", ascending=False)
-    chart = (
-        alt.Chart(out)
-        .mark_bar()
-        .encode(
-            x=alt.X("Count:Q", title="Count"),
-            y=alt.Y("Need:N", sort="-x"),
-            color="Need:N",
-            tooltip=["Need", "Count"],
-        )
-        .properties(title="Most Pressing Training Needs", height=380)
-    )
-    st.altair_chart(chart, use_container_width=True)
+    with col2:
+        st.markdown("**Extension Services Access**")
+        
+        if CAN["extension_access"] in d.columns:
+            ext_access = _safe_str(d, CAN["extension_access"])
+            ext_access = ext_access[ext_access != ""]
+            if not ext_access.empty:
+                ext_counts = ext_access.value_counts().reset_index()
+                ext_counts.columns = ["Source", "Count"]
+                chart = (
+                    alt.Chart(ext_counts)
+                    .mark_arc()
+                    .encode(
+                        theta=alt.Theta("Count:Q", stack=True),
+                        color=alt.Color("Source:N"),
+                        tooltip=["Source", "Count"],
+                    )
+                    .properties(title="Extension Services Access", height=300)
+                )
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.caption("Extension access data not available")
+        else:
+            st.caption("Extension access data not available")
+        
+        st.markdown("---")
+        st.markdown("**Training Providers**")
+        
+        if CAN["training_provider"] in d.columns:
+            provider = _safe_str(d, CAN["training_provider"])
+            provider = provider[provider != ""]
+            if not provider.empty:
+                prov_counts = provider.value_counts().reset_index()
+                prov_counts.columns = ["Provider", "Count"]
+                chart = (
+                    alt.Chart(prov_counts)
+                    .mark_bar()
+                    .encode(
+                        x="Provider:N", y="Count:Q", color="Provider:N"
+                    )
+                    .properties(height=250)
+                )
+                st.altair_chart(chart, use_container_width=True)
+            else:
+                st.caption("Training provider data not available")
+        else:
+            st.caption("Training provider data not available")
+
+
+def show_sustainability(df: pd.DataFrame):
+    """NEW: Sustainability practices section."""
+    st.subheader("🌱 Sustainability Practices")
+    d = _ensure_derived(df)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**💧 Water Source**")
+        if CAN["water_source"] in d.columns:
+            water = _safe_str(d, CAN["water_source"])
+            water = water[water != ""]
+            if not water.empty:
+                water_counts = water.value_counts()
+                for source, count in water_counts.items():
+                    st.write(f"- {source}: {count} farms")
+            else:
+                st.caption("Water source data not available")
+        else:
+            st.caption("Water source data not available")
+        
+        st.markdown("---")
+        st.markdown("**🗑️ Waste Management**")
+        if CAN["waste_management"] in d.columns:
+            waste = _safe_str(d, CAN["waste_management"])
+            waste = waste[waste != ""]
+            if not waste.empty:
+                waste_counts = waste.value_counts()
+                for method, count in waste_counts.items():
+                    st.write(f"- {method}: {count} farms")
+            else:
+                st.caption("Waste management data not available")
+        else:
+            st.caption("Waste management data not available")
+    
+    with col2:
+        st.markdown("**🌳 Biodiversity Practices**")
+        if CAN["biodiversity"] in d.columns:
+            bio = _safe_str(d, CAN["biodiversity"])
+            bio = bio[bio != ""]
+            if not bio.empty:
+                bio_counts = bio.value_counts()
+                for practice, count in bio_counts.items():
+                    st.write(f"- {practice}: {count} farms")
+            else:
+                st.caption("Biodiversity data not available")
+        else:
+            st.caption("Biodiversity data not available")
+        
+        st.markdown("---")
+        st.markdown("**🌾 Other Trees Planted**")
+        if CAN["additional_trees"] in d.columns:
+            trees = _safe_str(d, CAN["additional_trees"])
+            trees = trees[trees != ""]
+            if not trees.empty:
+                tree_counts = trees.value_counts()
+                for tree, count in tree_counts.head(5).items():
+                    st.write(f"- {tree}: {count} farms")
+            else:
+                st.caption("Additional trees data not available")
+        else:
+            st.caption("Additional trees data not available")
+    
+    st.markdown("---")
+    st.markdown("**🐄 Other Value Chains**")
+    if CAN["other_value_chains"] in d.columns:
+        chains = _safe_str(d, CAN["other_value_chains"])
+        chains = chains[chains != ""]
+        if not chains.empty:
+            chain_counts = chains.value_counts()
+            for chain, count in chain_counts.items():
+                st.write(f"- {chain}: {count} farms")
+        else:
+            st.caption("Other value chains data not available")
+    else:
+        st.caption("Other value chains data not available")
 
 
 # ==========================================================
-# Investor-grade sections (canonical)
+# Investor-grade sections (canonical - preserved)
 # ==========================================================
 def _prep_age_density_fields(df: pd.DataFrame, density_threshold: float) -> pd.DataFrame:
     d = _ensure_derived(df)
@@ -531,7 +940,6 @@ def _prep_age_density_fields(df: pd.DataFrame, density_threshold: float) -> pd.D
         f"≤{int(density_threshold)}",
     )
 
-    # Dominant age group
     if CAN["dominant_age"] in d.columns:
         d["dominant_age_group__derived"] = _safe_str(d, CAN["dominant_age"])
     else:
@@ -548,8 +956,6 @@ def _prep_age_density_fields(df: pd.DataFrame, density_threshold: float) -> pd.D
             }
         ).fillna("0-3 years")
 
-    # Income per acre is already in canonical as income_per_acre (derived upstream),
-    # but we keep a safe derived name used in visuals.
     d["income_per_acre__derived"] = pd.to_numeric(d.get(CAN["income_per_acre"], np.nan), errors="coerce")
 
     return _clip_inf(d)

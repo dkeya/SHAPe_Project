@@ -222,23 +222,79 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
         )
 
     KEY_COLS: Dict[str, List[str]] = {
+        # Core identification
         "Exporter": ["exporter", "1.1 Company Name", "Exporter", "Company"],
         "Farmer name": ["farmer_name", "1.10 Farmer's Name (Three Names)", "Farmer", "Farmer_Name"],
         "Farm/Orchard name": ["farm_name", "orchard_name", "1.22 Orchard Name/ Name of farm", "Farm_Name"],
+        
+        # Geographic
         "County": ["county", "1.2 County", "County"],
         "Sub-county": ["sub_county", "1.3 Sub County", "Sub_County", "Sub County"],
         "Ward": ["ward", "1.4 Ward", "Ward"],
         "Latitude": ["lat", "_1.21 GPS Coordinates of Orchard_latitude", "GPS_Latitude", "latitude"],
         "Longitude": ["lon", "_1.21 GPS Coordinates of Orchard_longitude", "GPS_Longitude", "longitude"],
+        
+        # Farmer Profile (NEW)
+        "Gender": ["gender", "1.11 Gender", "Gender"],
+        "Age": ["age", "1.12 Age", "Age"],
+        "Education Level": ["education", "1.13 Formal education level", "education_level", "Education"],
+        "Farming Experience (years)": ["experience", "1.14 Experience in Avocado farming in years", "farming_experience"],
+        
+        # Farm Characteristics
         "Avocado area (acres)": ["avocado_area_acres", "2.2 Total Area under Avocado Cultivation (Acres)", "Total Area under Avocado Cultivation (Acres)"],
         "Total trees": ["trees_planted", "2.3 Number of Avocado Trees Planted", "Number of Avocado Trees Planted"],
         "Trees age 0–3": ["trees_0_3", "2.41 Number of trees for Age class 0-3 years"],
         "Trees age 4–7": ["trees_4_7", "2.42 Number of trees for Age class 4-7 years"],
         "Trees age 8+": ["trees_8_plus", "trees_8p", "2.43 Number of trees for Age class 8+ years"],
+        
+        # Legal Registration (NEW)
+        "Orchard Group Registered": ["orchard_group", "1.24 Is this orchard registered as part of a Group", "orchard_group_registered"],
+        "KEPHIS Registration": ["kephis", "1.25 KEPHIS Registration Status", "kephis_registration"],
         "GACC approval": ["gacc_approval", "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status"],
+        
+        # Production Practices (NEW)
+        "Fertilizer Type - Organic": ["fertilizer_organic", "3.3 Type of Fertilizer Used/Organic"],
+        "Fertilizer Type - Inorganic": ["fertilizer_inorganic", "3.3 Type of Fertilizer Used/Inorganic"],
+        "Soil Conservation": ["soil_conservation", "3.4 Soil Conservation Measures Applied", "soil_conservation_practices"],
+        "Irrigation - Drip": ["irrigation_drip", "3.5 Irrigation Practices/Drip"],
+        "Irrigation - Sprinkler": ["irrigation_sprinkler", "3.5 Irrigation Practices/Sprinkler"],
+        "Irrigation - Rainfed": ["irrigation_rainfed", "3.5 Irrigation Practices/Rainfed"],
+        
+        # Productivity
+        "Fruits/tree 0-3 years": ["fruits_0_3", "4.8 Average No. of Fruits per avocado tree aged 0-3 years"],
+        "Fruits/tree 4-7 years": ["fruits_4_7", "4.81 Average No. of Fruits per avocado tree aged 4-7 years"],
+        "Fruits/tree 8+ years": ["fruits_8_plus", "4.82 Average No. of Fruits per avocado tree aged 8+ years"],
+        "Total Harvest (kg)": ["total_harvest", "4.2 Total Harvest Last Season (kg)"],
+        "Harvest Losses (kg)": ["harvest_losses", "4.3 Avocado Losses last season (kg)"],
+        
+        # Market Access
         "Main market outlet": ["main_market_outlet", "5.1 Main Market Outlet"],
-        "Hass price (KSh/kg)": ["hass_price_ksh_per_kg", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH)", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH) "],
+        "Hass price last season (KSh/kg)": ["hass_price_ksh_per_kg", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH)", "5.2 Average Selling Price of (Hass variety) per kg last Season (KSH) "],
+        "Hass price current season (KSh/kg)": ["hass_price_current", "5.6 Average Selling Price of (Hass variety) per kg this Season (KSH)", "hass_price_current_ksh_per_kg"],
+        "Grade 1 Share - Last Season (%)": ["grade1_share_last", "5.4 What proportion of your harvest did you sell as Grade 1 last season (%)?"],
+        "Grade 1 Share - Current Season (%)": ["grade1_share_current", "5.8 What proportion of your harvest did you sell as Grade 1 this season (%)?"],
         "Income (KSh, last season)": ["income_ksh_last_season", "5.3 Total Income from Avocado Sales (KSH last season)"],
+        
+        # Compliance (NEW)
+        "SPS Training Received": ["sps_training", "6.1 Training on SPS & Compliance Received"],
+        "Training Provider": ["training_provider", "8.3 Who provided the training"],
+        "Record Keeping": ["record_keeping", "6.3 Record-Keeping Practices"],
+        "Clean Harvesting Tools": ["sanitation_tools", "6.4 Use of Clean Harvesting Tools"],
+        "Pest Monitoring": ["pest_monitoring", "3.81 Pest Monitoring"],
+        "IPM Implemented": ["ipm_use", "3.8 Is an Integrated Pest Management (IPM) program implemented?"],
+        "Biological Control": ["biological_control", "3.83 Biological Control"],
+        
+        # Sustainability (NEW)
+        "Water Source": ["water_source", "7.1 Water Source for Irrigation"],
+        "Waste Management": ["waste_management", "7.2 Waste Management Practices"],
+        "Biodiversity Practices": ["biodiversity", "7.3 Biodiversity Conservation Practices"],
+        "Other Value Chains": ["other_value_chains", "7.5 What other value chains is the farmer involved in"],
+        
+        # Extension (NEW)
+        "Extension Access": ["extension_access", "8.4 Extension Services Accessed"],
+        "Training Needs Text": ["training_needs_text", "8.6 What are your most pressing training/extension needs", "Suggestions for the Shape Program Improvement"],
+        
+        # Timestamp
         "Submission/interview date": ["submitdate", "submit_date", "data_time", "SubmissionDate", "Date of interview:"],
     }
 
@@ -275,9 +331,11 @@ def key_columns_summary(df: Optional[pd.DataFrame] = None, uploaded_file=None) -
             sn = pd.to_numeric(s, errors="coerce")
             ok = sn.notna().mean() * 100.0
             note = f"Numeric coverage: {ok:.0f}%"
-        elif any(k in logical.lower() for k in ["price", "area", "trees", "income"]):
+        elif any(k in logical.lower() for k in ["price", "area", "trees", "income", "yield", "harvest", "fruits"]):
             sn = pd.to_numeric(s, errors="coerce")
             note = f"Numeric coverage: {(sn.notna().mean()*100.0):.0f}%"
+        elif logical in ["Gender", "Orchard Group Registered", "KEPHIS Registration", "GACC approval", "SPS Training Received"]:
+            note = "Binary field (Yes/No)"
 
         rows.append(
             {

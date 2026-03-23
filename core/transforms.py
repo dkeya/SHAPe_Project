@@ -115,6 +115,7 @@ def _to_datetime_series(s: pd.Series) -> pd.Series:
 # Extra fields (robust fallback, even if schema not updated)
 # ----------------------------------------------------------
 EXTRA_FIELDS = [
+    # Production
     {
         "name": "harvest_kg",
         "dtype": "float",
@@ -125,6 +126,252 @@ EXTRA_FIELDS = [
             "Total Harvest (kg)",
             "Harvest (kg)",
             "harvest_kg",
+        ],
+    },
+    # Farmer Profile
+    {
+        "name": "gender",
+        "dtype": "string",
+        "synonyms": [
+            "1.11 Gender",
+            "Gender",
+            "gender",
+        ],
+    },
+    {
+        "name": "age",
+        "dtype": "float",
+        "synonyms": [
+            "1.12 Age",
+            "Age",
+            "age",
+        ],
+    },
+    {
+        "name": "education",
+        "dtype": "string",
+        "synonyms": [
+            "1.13 Formal education level",
+            "Education Level",
+            "education",
+            "Formal education level",
+        ],
+    },
+    {
+        "name": "experience",
+        "dtype": "float",
+        "synonyms": [
+            "1.14 Experience in Avocado farming in years",
+            "Farming Experience",
+            "experience",
+        ],
+    },
+    # Legal Registration
+    {
+        "name": "orchard_group",
+        "dtype": "bool",
+        "synonyms": [
+            "1.24 Is this orchard registered as part of a Group",
+            "Orchard Group Registration",
+        ],
+    },
+    # Production Practices
+    {
+        "name": "fertilizer_organic",
+        "dtype": "bool",
+        "synonyms": [
+            "3.3 Type of Fertilizer Used/Organic",
+            "Organic Fertilizer",
+        ],
+    },
+    {
+        "name": "fertilizer_inorganic",
+        "dtype": "bool",
+        "synonyms": [
+            "3.3 Type of Fertilizer Used/Inorganic",
+            "Inorganic Fertilizer",
+        ],
+    },
+    {
+        "name": "soil_conservation",
+        "dtype": "string",
+        "synonyms": [
+            "3.4 Soil Conservation Measures Applied",
+            "Soil Conservation",
+        ],
+    },
+    {
+        "name": "irrigation_drip",
+        "dtype": "bool",
+        "synonyms": [
+            "3.5 Irrigation Practices/Drip",
+            "Drip Irrigation",
+        ],
+    },
+    {
+        "name": "irrigation_sprinkler",
+        "dtype": "bool",
+        "synonyms": [
+            "3.5 Irrigation Practices/Sprinkler",
+            "Sprinkler Irrigation",
+        ],
+    },
+    {
+        "name": "irrigation_rainfed",
+        "dtype": "bool",
+        "synonyms": [
+            "3.5 Irrigation Practices/Rainfed",
+            "Rainfed",
+        ],
+    },
+    # Compliance
+    {
+        "name": "sanitation_tools",
+        "dtype": "bool",
+        "synonyms": [
+            "6.4 Use of Clean Harvesting Tools",
+            "Clean Harvesting Tools",
+        ],
+    },
+    {
+        "name": "ipm_use",
+        "dtype": "bool",
+        "synonyms": [
+            "3.8 Is an Integrated Pest Management (IPM) program implemented?",
+            "IPM Implemented",
+        ],
+    },
+    {
+        "name": "biological_control",
+        "dtype": "bool",
+        "synonyms": [
+            "3.83 Biological Control",
+            "Biological Control",
+        ],
+    },
+    # Market
+    {
+        "name": "hass_price_current_ksh_per_kg",
+        "dtype": "float",
+        "synonyms": [
+            "5.6 Average Selling Price of (Hass variety) per kg this Season (KSH)",
+            "Current Hass price per kg",
+        ],
+    },
+    {
+        "name": "grade1_share_last",
+        "dtype": "float",
+        "synonyms": [
+            "5.4 What proportion of your harvest did you sell as Grade 1 last season (%)?",
+            "Grade 1 Share Last Season",
+        ],
+    },
+    {
+        "name": "grade1_share_current",
+        "dtype": "float",
+        "synonyms": [
+            "5.8 What proportion of your harvest did you sell as Grade 1 this season (%)?",
+            "Grade 1 Share Current Season",
+        ],
+    },
+    {
+        "name": "market_constraints",
+        "dtype": "string",
+        "synonyms": [
+            "5.10 Challenges in Market Access",
+            "Market Access Challenges",
+        ],
+    },
+    # Training
+    {
+        "name": "sps_training",
+        "dtype": "bool",
+        "synonyms": [
+            "6.1 Training on SPS & Compliance Received",
+            "SPS Training Received",
+        ],
+    },
+    {
+        "name": "training_provider",
+        "dtype": "string",
+        "synonyms": [
+            "8.3 Who provided the training",
+            "Training Provider",
+        ],
+    },
+    {
+        "name": "record_keeping",
+        "dtype": "bool",
+        "synonyms": [
+            "6.3 Record-Keeping Practices",
+            "Record Keeping",
+        ],
+    },
+    {
+        "name": "extension_access",
+        "dtype": "string",
+        "synonyms": [
+            "8.4 Extension Services Accessed",
+            "Extension Services",
+        ],
+    },
+    # Sustainability
+    {
+        "name": "water_source",
+        "dtype": "string",
+        "synonyms": [
+            "7.1 Water Source for Irrigation",
+            "Water Source",
+        ],
+    },
+    {
+        "name": "waste_management",
+        "dtype": "string",
+        "synonyms": [
+            "7.2 Waste Management Practices",
+            "Waste Management",
+        ],
+    },
+    {
+        "name": "biodiversity",
+        "dtype": "string",
+        "synonyms": [
+            "7.3 Biodiversity Conservation Practices",
+            "Biodiversity Practices",
+        ],
+    },
+    {
+        "name": "additional_trees",
+        "dtype": "string",
+        "synonyms": [
+            "7.4 What other trees are planted around/within the orchard",
+            "Other Trees Planted",
+        ],
+    },
+    {
+        "name": "other_value_chains",
+        "dtype": "string",
+        "synonyms": [
+            "7.5 What other value chains is the farmer involved in",
+            "Other Value Chains",
+        ],
+    },
+    # Losses
+    {
+        "name": "harvest_losses_kg",
+        "dtype": "float",
+        "synonyms": [
+            "4.3 Avocado Losses last season (kg)",
+            "Avocado Losses (kg)",
+            "Losses (kg)",
+        ],
+    },
+    {
+        "name": "loss_causes",
+        "dtype": "string",
+        "synonyms": [
+            "4.31 Primary Cause of Loss last season",
+            "Primary Cause of Loss",
         ],
     },
 ]
@@ -162,7 +409,7 @@ def _add_extra_field(
 
 
 # ----------------------------------------------------------
-# NEW: Derive sub_county from raw one-hot columns (1.4* SubCounty ...)
+# Derive sub_county from raw one-hot columns (1.4* SubCounty ...)
 # ----------------------------------------------------------
 def _derive_sub_county_from_onehots(raw_df: pd.DataFrame) -> pd.Series:
     """
@@ -196,9 +443,6 @@ def _derive_sub_county_from_onehots(raw_df: pd.DataFrame) -> pd.Series:
 
     def _label_from_col(colname: str) -> str:
         # Remove the leading "1.4X SubCounty" part
-        # Examples:
-        #  "1.4P SubCounty Baringo/Baringo Central" -> "Baringo Central"
-        #  "1.4A Subcounty Meru" -> "Meru"
         s = str(colname)
 
         # strip duplicate marker if present
@@ -221,8 +465,6 @@ def _derive_sub_county_from_onehots(raw_df: pd.DataFrame) -> pd.Series:
         picked = [labels[c] for c in sub_cols if int(row.get(c, 0)) == 1 and labels.get(c)]
         if not picked:
             return ""
-        # If multiple selected (rare), keep them all (stable + transparent)
-        # but dedupe while preserving order
         seen = set()
         out = []
         for x in picked:
@@ -267,12 +509,11 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
     for f in EXTRA_FIELDS:
         _add_extra_field(raw_df, out, used, f["name"], f["dtype"], f.get("synonyms", []))
 
-    # 3) NEW: sub_county derived from raw one-hots if sub_county is missing/empty
+    # 3) sub_county derived from raw one-hots if sub_county is missing/empty
     if ("sub_county" not in out.columns) or (out["sub_county"].astype("string").str.strip().replace("", np.nan).isna().all()):
         derived_sub = _derive_sub_county_from_onehots(raw_df)
         if isinstance(derived_sub, pd.Series) and len(derived_sub) == len(out):
             out["sub_county"] = derived_sub
-            # mark mapping as derived (helps diagnostics)
             if "sub_county" not in used:
                 used["sub_county"] = "derived:1.4*_SubCounty_onehots"
 
