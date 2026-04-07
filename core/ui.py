@@ -7,7 +7,6 @@ def set_global_style():
         <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            header {visibility: hidden;}
             .stSlider [data-baseweb="slider"] { padding: 0; }
             .metric-card {
                 border-radius: 10px;
