@@ -79,8 +79,19 @@ def require_auth():
 
     users = load_users_registry()
 
-    # Use a container with a key that persists even when sidebar is collapsed
-    # This ensures the login form is always available
+    # Force sidebar to be expanded by adding a CSS rule
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"] {
+            min-width: 300px !important;
+            width: 300px !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] {
+            display: none !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     with st.sidebar:
         st.markdown("## Sign in")
         username = st.text_input("Username", key="auth_username")
@@ -111,7 +122,7 @@ def require_auth():
             st.session_state.pop("auth_password", None)
             st.rerun()
 
-    # Show message in main content area, not in sidebar
+    # Show message in main content area only
     st.warning("Please sign in to continue using the dashboard.")
     st.info("👈 **Use the sidebar on the left to enter your credentials.**")
     st.stop()
@@ -166,12 +177,7 @@ def permissions(user: dict):
     role = (user or {}).get("role", "exporter")
 
     return {
-        # ✅ Analysis should be accessible to both admin + exporters
         "can_view_analysis": True,
-
-        # ✅ Raw data / downloads should remain admin-only (enterprise governance)
         "can_view_raw_data": role == "admin",
-
-        # ✅ Admin page remains admin-only
         "can_view_admin": role == "admin",
     }
