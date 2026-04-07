@@ -4,7 +4,12 @@ from core.auth import require_auth, logout_button
 from core.ui import set_global_style
 from core.data import set_uploaded_workbook_bytes_in_session
 
-st.set_page_config(page_title="SHAPe Avocado Dashboard", page_icon="🥑", layout="wide")
+st.set_page_config(
+    page_title="SHAPe Avocado Dashboard",
+    page_icon="🥑",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 set_global_style()
 
 

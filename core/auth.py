@@ -108,6 +108,7 @@ def require_auth():
         st.rerun()
 
     st.warning("Please sign in to continue.")
+    st.info("The sign-in form is in the left sidebar. If the sidebar is hidden, click the small '>' arrow at the top-left to reopen it.")
     st.stop()
 
 def logout_button():
