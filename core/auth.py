@@ -73,42 +73,34 @@ def load_users_registry() -> dict:
     }
 
 def require_auth():
-    """Require authentication - login form shown in main area, not sidebar."""
-    # Check if already authenticated
+    # Check if user is already authenticated
     if st.session_state.get("auth_user"):
         return st.session_state["auth_user"]
 
     users = load_users_registry()
 
-    # Show login form in the main area (not sidebar) to avoid collapse issues
-    st.markdown("## 🔐 Please sign in to continue")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.markdown("### Login")
-        username = st.text_input("Username", key="auth_username_main")
-        password = st.text_input("Password", type="password", key="auth_password_main")
-        
-        col_a, col_b = st.columns(2)
-        do_login = col_a.button("Login", type="primary", use_container_width=True)
-        do_clear = col_b.button("Clear", use_container_width=True)
-        
+    # Use a container with a key that persists even when sidebar is collapsed
+    # This ensures the login form is always available
+    with st.sidebar:
+        st.markdown("## Sign in")
+        username = st.text_input("Username", key="auth_username")
+        password = st.text_input("Password", type="password", key="auth_password")
+
+        col1, col2 = st.columns(2)
+        do_login = col1.button("Login", use_container_width=True, key="auth_login_btn")
+        do_clear = col2.button("Clear", use_container_width=True, key="auth_clear_btn")
+
         if do_clear:
-            st.session_state.pop("auth_username_main", None)
-            st.session_state.pop("auth_password_main", None)
+            st.session_state.pop("auth_username", None)
+            st.session_state.pop("auth_password", None)
             st.rerun()
-        
+
         if do_login:
-            if not username or not password:
-                st.error("Please enter both username and password.")
-                st.stop()
-            
             u = users.get(username)
             if (not u) or (not verify_password(password, u.get("password_hash", ""))):
                 st.error("Invalid username or password.")
                 st.stop()
-            
+
             user = {
                 "username": username,
                 "name": u.get("name", username),
@@ -116,18 +108,16 @@ def require_auth():
                 "exporters": u.get("exporters", []),
             }
             st.session_state["auth_user"] = user
-            st.session_state.pop("auth_username_main", None)
-            st.session_state.pop("auth_password_main", None)
+            st.session_state.pop("auth_password", None)
             st.rerun()
-    
-    with col2:
-        st.info("### Demo Credentials\n\n**Username:** admin\n**Password:** admin123*")
-    
+
+    # Show message in main content area, not in sidebar
+    st.warning("Please sign in to continue using the dashboard.")
+    st.info("👈 **Use the sidebar on the left to enter your credentials.**")
     st.stop()
 
 def logout_button():
-    """Logout button in sidebar."""
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
+    if st.sidebar.button("Logout", use_container_width=True, key="logout_btn"):
         st.session_state.pop("auth_user", None)
         st.rerun()
 

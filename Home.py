@@ -1,4 +1,4 @@
-# Home.py
+# app.py
 import streamlit as st
 from core.auth import require_auth, logout_button
 from core.ui import set_global_style
@@ -10,10 +10,7 @@ set_global_style()
 
 def main():
     user = require_auth()
-    
-    # Only show logout button if authenticated
-    if user:
-        logout_button()
+    logout_button()
 
     st.title("🥑 SHAPe Avocado Program")
 
