@@ -73,62 +73,45 @@ def load_users_registry() -> dict:
     }
 
 def require_auth():
-    # Check if user is already authenticated
     if st.session_state.get("auth_user"):
         return st.session_state["auth_user"]
 
     users = load_users_registry()
 
-    # Force sidebar to be expanded by adding a CSS rule
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"] {
-            min-width: 300px !important;
-            width: 300px !important;
+    st.sidebar.markdown("## Sign in")
+    username = st.sidebar.text_input("Username", key="auth_username")
+    password = st.sidebar.text_input("Password", type="password", key="auth_password")
+
+    c1, c2 = st.sidebar.columns(2)
+    do_login = c1.button("Login", use_container_width=True)
+    do_clear = c2.button("Clear", use_container_width=True)
+
+    if do_clear:
+        st.session_state.pop("auth_username", None)
+        st.session_state.pop("auth_password", None)
+        st.stop()
+
+    if do_login:
+        u = users.get(username)
+        if (not u) or (not verify_password(password, u.get("password_hash", ""))):
+            st.sidebar.error("Invalid username or password.")
+            st.stop()
+
+        user = {
+            "username": username,
+            "name": u.get("name", username),
+            "role": u.get("role", "exporter"),
+            "exporters": u.get("exporters", []),
         }
-        [data-testid="stSidebarCollapsedControl"] {
-            display: none !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+        st.session_state["auth_user"] = user
+        st.session_state.pop("auth_password", None)
+        st.rerun()
 
-    with st.sidebar:
-        st.markdown("## Sign in")
-        username = st.text_input("Username", key="auth_username")
-        password = st.text_input("Password", type="password", key="auth_password")
-
-        col1, col2 = st.columns(2)
-        do_login = col1.button("Login", use_container_width=True, key="auth_login_btn")
-        do_clear = col2.button("Clear", use_container_width=True, key="auth_clear_btn")
-
-        if do_clear:
-            st.session_state.pop("auth_username", None)
-            st.session_state.pop("auth_password", None)
-            st.rerun()
-
-        if do_login:
-            u = users.get(username)
-            if (not u) or (not verify_password(password, u.get("password_hash", ""))):
-                st.error("Invalid username or password.")
-                st.stop()
-
-            user = {
-                "username": username,
-                "name": u.get("name", username),
-                "role": u.get("role", "exporter"),
-                "exporters": u.get("exporters", []),
-            }
-            st.session_state["auth_user"] = user
-            st.session_state.pop("auth_password", None)
-            st.rerun()
-
-    # Show message in main content area only
-    st.warning("Please sign in to continue using the dashboard.")
-    st.info("👈 **Use the sidebar on the left to enter your credentials.**")
+    st.warning("Please sign in to continue.")
     st.stop()
 
 def logout_button():
-    if st.sidebar.button("Logout", use_container_width=True, key="logout_btn"):
+    if st.sidebar.button("Logout", use_container_width=True):
         st.session_state.pop("auth_user", None)
         st.rerun()
 
@@ -177,7 +160,13 @@ def permissions(user: dict):
     role = (user or {}).get("role", "exporter")
 
     return {
+        # ✅ Analysis should be accessible to both admin + exporters
         "can_view_analysis": True,
+
+        # ✅ Raw data / downloads should remain admin-only (enterprise governance)
         "can_view_raw_data": role == "admin",
+
+        # ✅ Admin page remains admin-only
         "can_view_admin": role == "admin",
     }
+
