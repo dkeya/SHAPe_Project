@@ -14,7 +14,17 @@ from core.sections_monitoring import (
     show_training_needs,
     show_investor_income_view,
     show_income_potential_forecast,
-    show_sustainability,  # NEW import
+    show_sustainability,
+    # NEW: Enhanced sections
+    show_geo_spatial_aez,
+    show_farmer_profile,
+    show_farm_characteristics,
+    show_productivity_efficiency,
+    show_enhanced_compliance,
+    show_ipm_measures,
+    show_gacc_progress,
+    show_organic_alignment,
+    show_grade_completeness,
 )
 
 st.set_page_config(page_title="SHAPe Avocado | Monitoring", page_icon="🥑", layout="wide")
@@ -205,22 +215,66 @@ def main():
         st.warning("No records match the selected filters.")
         return
 
-    # -----------------
-    # Monitoring sections
-    # -----------------
+    # ==========================================================
+    # Monitoring sections - Enhanced with all new sections
+    # ==========================================================
+    
+    # Section 1: Overview (existing)
     show_overview(filtered_df, metrics_df)
-    show_geospatial(filtered_df)
+    
+    # Section 2: Geo-Spatial & AEZ (NEW)
+    with st.expander("🌍 Geo-Spatial & Agro-Ecological Zones", expanded=False):
+        show_geo_spatial_aez(filtered_df)
+    
+    # Section 3: Farmer Profile (NEW)
+    with st.expander("👥 Farmer Profile", expanded=False):
+        show_farmer_profile(filtered_df)
+    
+    # Section 4: Farm Characteristics (NEW)
+    with st.expander("🌱 Farm Characteristics", expanded=False):
+        show_farm_characteristics(filtered_df)
+    
+    # Section 5: Productivity & Efficiency (NEW)
+    with st.expander("📈 Productivity & Efficiency", expanded=False):
+        show_productivity_efficiency(filtered_df)
+    
+    # Section 6: Certification & Compliance (existing)
     show_certification(filtered_df)
+    
+    # Section 7: Enhanced Compliance (NEW)
+    with st.expander("✅ Enhanced Compliance Metrics", expanded=False):
+        show_enhanced_compliance(filtered_df)
+    
+    # Section 8: IPM Measures (NEW)
+    with st.expander("🐛 Integrated Pest Management (IPM) Measures", expanded=False):
+        show_ipm_measures(filtered_df)
+    
+    # Section 9: Production Metrics (existing)
     show_production_metrics(filtered_df)
-
-    # Investor-grade sections
-    show_investor_income_view(filtered_df)
-    show_income_potential_forecast(filtered_df)
-
+    
+    # Section 10: Grade Completeness (NEW)
+    with st.expander("📊 Grade Completeness Analysis", expanded=False):
+        show_grade_completeness(filtered_df)
+    
+    # Section 11: Market Access (existing)
     show_market_analysis(filtered_df)
+    
+    # Section 12: GACC Progress Tracking (NEW)
+    with st.expander("🌐 GACC Progress Tracking", expanded=False):
+        show_gacc_progress(filtered_df)
+    
+    # Section 13: Organic Alignment (NEW)
+    with st.expander("🌱 Organic Alignment", expanded=False):
+        show_organic_alignment(filtered_df)
+    
+    # Section 14: Training Needs (existing)
     show_training_needs(filtered_df)
     
-    # NEW: Sustainability section
+    # Section 15: Investor Views (existing)
+    show_investor_income_view(filtered_df)
+    show_income_potential_forecast(filtered_df)
+    
+    # Section 16: Sustainability (existing)
     show_sustainability(filtered_df)
 
     # -----------------

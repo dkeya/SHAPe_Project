@@ -112,7 +112,7 @@ CANONICAL_FIELDS: List[SchemaField] = [
             "experience",
         ],
     ),
-
+  
     # ==========================================================
     # Geography
     # ==========================================================
@@ -121,7 +121,7 @@ CANONICAL_FIELDS: List[SchemaField] = [
         dtype="string",
         required=False,
         synonyms=[
-            "1.2 County",
+            "1.3 County",
             "County",
         ],
     ),
@@ -130,7 +130,7 @@ CANONICAL_FIELDS: List[SchemaField] = [
         dtype="string",
         required=False,
         synonyms=[
-            "1.3 Sub County",
+            "1.4 Sub County",
             "Sub County",
             "Sub_County",
         ],
@@ -140,7 +140,7 @@ CANONICAL_FIELDS: List[SchemaField] = [
         dtype="string",
         required=False,
         synonyms=[
-            "1.4 Ward",
+            "1.5 Ward",
             "Ward",
         ],
     ),
@@ -168,6 +168,17 @@ CANONICAL_FIELDS: List[SchemaField] = [
             "lon",
         ],
     ),
+    SchemaField(
+        name="altitude",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "_1.21 GPS Coordinates of Orchard_altitude",
+            "1.21 GPS Coordinates of Orchard_altitude",
+            "Altitude",
+            "altitude",
+        ],
+    ),
 
     # ==========================================================
     # Legal Registration
@@ -180,6 +191,25 @@ CANONICAL_FIELDS: List[SchemaField] = [
             "1.24 Is this orchard registered as part of a Group",
             "Orchard Group Registration",
             "Group Registration",
+        ],
+    ),
+    SchemaField(
+        name="gacc_status",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status",
+            "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status ",
+            "GACC approval",
+        ],
+    ),
+    SchemaField(
+        name="kephis_status",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "1.25 KEPHIS Registration Status",
+            "KEPHIS registration",
         ],
     ),
 
@@ -374,27 +404,126 @@ CANONICAL_FIELDS: List[SchemaField] = [
     ),
 
     # ==========================================================
-    # Compliance & Certifications
+    # NEW: Enhanced Production Practices (from updated document)
     # ==========================================================
     SchemaField(
-        name="gacc_status",
+        name="dropped_fruits_elimination",
         dtype="bool",
         required=False,
         synonyms=[
-            "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status",
-            "1.26 General Administration of Customs of the Peoples Republic of China (GACC ) Approval Status ",
-            "GACC approval",
+            "3.7 Is there prompt elimination of dropped fruits?",
+            "Prompt elimination of dropped fruits",
+            "Dropped fruits elimination",
         ],
     ),
     SchemaField(
-        name="kephis_status",
+        name="weed_management",
         dtype="bool",
         required=False,
         synonyms=[
-            "1.25 KEPHIS Registration Status",
-            "KEPHIS registration",
+            "Weed management",
+            "Weed control",
+            "Weeding",
         ],
     ),
+    SchemaField(
+        name="pruning_practices",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "Pruning",
+            "Tree Pruning",
+            "Pruning of trees",
+            "Pruning practices",
+        ],
+    ),
+
+    # ==========================================================
+    # NEW: Detailed IPM Measures (from updated document)
+    # ==========================================================
+    SchemaField(
+        name="ipm_traps",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.91 Fly Traps",
+            "Fly Traps",
+            "Use of traps",
+            "Traps",
+        ],
+    ),
+    SchemaField(
+        name="ipm_chemical",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.92 Chemical Control",
+            "Chemical control",
+            "IPM Chemical",
+        ],
+    ),
+    SchemaField(
+        name="ipm_biological",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.93 Biological Control",
+            "Biological control",
+            "IPM Biological",
+        ],
+    ),
+    SchemaField(
+        name="ipm_mating_disruption",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "3.94 Mating Disruption",
+            "Mating disruption",
+            "IPM Mating disruption",
+        ],
+    ),
+
+    # ==========================================================
+    # NEW: Certification Compliance Training (from updated document)
+    # ==========================================================
+    SchemaField(
+        name="cert_compliance_training",
+        dtype="bool",
+        required=False,
+        synonyms=[
+            "8.6 What are your most pressing training/extension needs/Certification Compliance",
+            "Certification Compliance Training",
+            "Training on certification compliance",
+            "Certification training",
+        ],
+    ),
+
+    # ==========================================================
+    # NEW: Grade 2 Share (from updated document)
+    # ==========================================================
+    SchemaField(
+        name="grade2_share_last",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "5.5 What proportion of your harvest did you retain for own use/gifting last season (%)?",
+            "Grade 2 Share Last Season",
+            "Own use share",
+        ],
+    ),
+    SchemaField(
+        name="grade2_share_current",
+        dtype="float",
+        required=False,
+        synonyms=[
+            "5.9 What proportion of your harvest did you retain for own use/gifting this season (%)?",
+            "Grade 2 Share Current Season",
+        ],
+    ),
+
+    # ==========================================================
+    # Compliance & Certifications (continued)
+    # ==========================================================
     SchemaField(
         name="sanitation_record",
         dtype="bool",
@@ -558,6 +687,24 @@ CANONICAL_FIELDS: List[SchemaField] = [
         ],
     ),
     SchemaField(
+        name="training_last_year",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "8.1Training Received in the Last Year",
+            "Training last year",
+        ],
+    ),
+    SchemaField(
+        name="training_last_6months",
+        dtype="string",
+        required=False,
+        synonyms=[
+            "8.2 Training Received in the Last 6-months",
+            "Training last 6 months",
+        ],
+    ),
+    SchemaField(
         name="training_provider",
         dtype="string",
         required=False,
@@ -684,6 +831,7 @@ RECOMMENDED_FOR_EXEC = [
     "ward",
     "lat",
     "lon",
+    "altitude",
     # Scale
     "area_acres",
     "trees_total",
@@ -706,6 +854,20 @@ RECOMMENDED_FOR_EXEC = [
     "irrigation_drip",
     "irrigation_sprinkler",
     "irrigation_rainfed",
+    # NEW: Enhanced Production Practices
+    "dropped_fruits_elimination",
+    "weed_management",
+    "pruning_practices",
+    # NEW: Detailed IPM Measures
+    "ipm_traps",
+    "ipm_chemical",
+    "ipm_biological",
+    "ipm_mating_disruption",
+    # NEW: Certification Compliance Training
+    "cert_compliance_training",
+    # NEW: Grade 2 Share
+    "grade2_share_last",
+    "grade2_share_current",
     # Compliance
     "gacc_status",
     "kephis_status",
@@ -729,6 +891,8 @@ RECOMMENDED_FOR_EXEC = [
     "market_constraints",
     # Training
     "sps_training",
+    "training_last_year",
+    "training_last_6months",
     "training_provider",
     "record_keeping",
     "extension_access",

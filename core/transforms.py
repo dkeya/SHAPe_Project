@@ -111,6 +111,73 @@ def _to_datetime_series(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
 
 
+# ==========================================================
+# AEZ Mapping Function
+# ==========================================================
+def map_gps_to_aez(lat: float, lon: float) -> str:
+    """
+    Map GPS coordinates to Kenya's Agro-Ecological Zones (AEZ).
+    This is a simplified version - in production, you would use a shapefile
+    or a more comprehensive mapping database.
+    
+    Kenya's AEZ classification (simplified):
+    - Zone I: Alpine (High altitude, >3000m) - Very cold
+    - Zone II: High Potential (2000-3000m) - Tea, coffee zones
+    - Zone III: Medium Potential (1500-2000m) - Mixed farming
+    - Zone IV: Semi-arid (1000-1500m) - Livestock, drought crops
+    - Zone V: Arid (<1000m) - Pastoralism
+    
+    Returns AEZ classification string.
+    """
+    if pd.isna(lat) or pd.isna(lon):
+        return "Unknown"
+    
+    # Simplified altitude-based AEZ mapping
+    # In production, you would use actual AEZ shapefile data
+    altitude = None
+    
+    # Placeholder - actual implementation would use:
+    # 1. Digital Elevation Model (DEM) data
+    # 2. AEZ shapefile from Kenya Agricultural Research Institute
+    # 3. Or pre-computed AEZ lookup table
+    
+    # For now, return based on approximate altitude ranges
+    # This should be replaced with actual altitude data from GPS
+    
+    return "Unknown"  # Will be populated from GPS altitude in real implementation
+
+
+def assign_aez_from_altitude(df: pd.DataFrame) -> pd.Series:
+    """
+    Assign AEZ based on altitude data from GPS coordinates.
+    
+    Kenya AEZ by altitude (simplified):
+    - Alpine (>3000m): Zone I
+    - Highland (2000-3000m): Zone II
+    - Medium (1500-2000m): Zone III
+    - Lowland (1000-1500m): Zone IV
+    - Arid (<1000m): Zone V
+    """
+    if "altitude" not in df.columns:
+        return pd.Series(["Unknown"] * len(df), index=df.index, dtype="string")
+    
+    def _assign(alt):
+        if pd.isna(alt):
+            return "Unknown"
+        if alt > 3000:
+            return "Zone I (Alpine)"
+        elif alt > 2000:
+            return "Zone II (High Potential)"
+        elif alt > 1500:
+            return "Zone III (Medium Potential)"
+        elif alt > 1000:
+            return "Zone IV (Semi-arid)"
+        else:
+            return "Zone V (Arid)"
+    
+    return df["altitude"].apply(_assign).astype("string")
+
+
 # ----------------------------------------------------------
 # Extra fields (robust fallback, even if schema not updated)
 # ----------------------------------------------------------
@@ -152,9 +219,11 @@ EXTRA_FIELDS = [
         "dtype": "string",
         "synonyms": [
             "1.13 Formal education level",
+            "Formal education level",
             "Education Level",
             "education",
-            "Formal education level",
+            "Highest education",
+            "Educational attainment",
         ],
     },
     {
@@ -162,7 +231,10 @@ EXTRA_FIELDS = [
         "dtype": "float",
         "synonyms": [
             "1.14 Experience in Avocado farming in years",
+            "Experience in Avocado farming in years",
             "Farming Experience",
+            "Avocado farming experience",
+            "Experience years",
             "experience",
         ],
     },
@@ -190,6 +262,38 @@ EXTRA_FIELDS = [
         "synonyms": [
             "3.3 Type of Fertilizer Used/Inorganic",
             "Inorganic Fertilizer",
+        ],
+    },
+    {
+        "name": "fertilizer_quantity_liquid_organic",
+        "dtype": "float",
+        "synonyms": [
+            "3.311 Provide the annual quantity of Liquid Organic Fertilizer used per tree (in liters)",
+            "Liquid Organic Fertilizer quantity",
+        ],
+    },
+    {
+        "name": "fertilizer_quantity_solid_organic",
+        "dtype": "float",
+        "synonyms": [
+            "3.312 Provide the annual quantity of Solid Organic Fertilizer used per tree (in kgs)",
+            "Solid Organic Fertilizer quantity",
+        ],
+    },
+    {
+        "name": "fertilizer_quantity_liquid_inorganic",
+        "dtype": "float",
+        "synonyms": [
+            "3.313 Provide the annual quantity of Liquid Inorganic Fertilizer used per tree (in liters)",
+            "Liquid Inorganic Fertilizer quantity",
+        ],
+    },
+    {
+        "name": "fertilizer_quantity_solid_inorganic",
+        "dtype": "float",
+        "synonyms": [
+            "3.314 Provide the annual quantity of Solid Inorganic Fertilizer used per tree (in kgs)",
+            "Solid Inorganic Fertilizer quantity",
         ],
     },
     {
@@ -224,6 +328,202 @@ EXTRA_FIELDS = [
             "Rainfed",
         ],
     },
+    {
+        "name": "sanitation_record",
+        "dtype": "bool",
+        "synonyms": [
+            "3.6 Is there a record of sanitation conditions?",
+            "Sanitation record",
+        ],
+    },
+
+    # ==========================================================
+    # NEW: Enhanced Production Practices (from updated document)
+    # ==========================================================
+    {
+        "name": "dropped_fruits_elimination",
+        "dtype": "bool",
+        "synonyms": [
+            "3.7 Is there prompt elimination of dropped fruits?",
+            "Prompt elimination of dropped fruits",
+            "Dropped fruits elimination",
+            "Elimination of dropped fruits",
+            "Dropped fruits removal",
+        ],
+    },
+    {
+        "name": "weed_management",
+        "dtype": "bool",
+        "synonyms": [
+            "Weed management",
+            "Weed control",
+            "Weeding",
+            "Weed Management",
+            "Weed management practices",
+        ],
+    },
+    {
+        "name": "pruning_practices",
+        "dtype": "bool",
+        "synonyms": [
+            "Pruning",
+            "Tree Pruning",
+            "Pruning of trees",
+            "Pruning practices",
+            "6.3 Record-Keeping Practices/Pruning",
+        ],
+    },
+
+    # ==========================================================
+    # NEW: Detailed IPM Measures (from updated document)
+    # ==========================================================
+    {
+        "name": "ipm_traps",
+        "dtype": "bool",
+        "synonyms": [
+            "3.91 Fly Traps",
+            "Fly Traps",
+            "Use of traps",
+            "Traps",
+            "Fly traps",
+            "3.84 Fly Traps",
+        ],
+    },
+    {
+        "name": "ipm_chemical",
+        "dtype": "bool",
+        "synonyms": [
+            "3.92 Chemical Control",
+            "Chemical control",
+            "IPM Chemical",
+            "Chemical Control",
+            "3.82 Chemical Control",
+        ],
+    },
+    {
+        "name": "ipm_biological",
+        "dtype": "bool",
+        "synonyms": [
+            "3.93 Biological Control",
+            "Biological control",
+            "IPM Biological",
+            "Biological Control",
+            "3.83 Biological Control",
+        ],
+    },
+    {
+        "name": "ipm_mating_disruption",
+        "dtype": "bool",
+        "synonyms": [
+            "3.94 Mating Disruption",
+            "Mating disruption",
+            "IPM Mating disruption",
+            "Mating Disruption",
+        ],
+    },
+    {
+        "name": "ipm_pest_monitoring",
+        "dtype": "bool",
+        "synonyms": [
+            "3.81 Pest Monitoring",
+            "Pest monitoring",
+            "Is pest monitoring conducted",
+        ],
+    },
+
+    # ==========================================================
+    # NEW: Certification Compliance Training (from updated document)
+    # ==========================================================
+    {
+        "name": "cert_compliance_training",
+        "dtype": "bool",
+        "synonyms": [
+            "8.6 What are your most pressing training/extension needs/Certification Compliance",
+            "Certification Compliance Training",
+            "Training on certification compliance",
+            "Certification training",
+            "8.2 Training Received in the Last 6-months/Certification Compliance",
+        ],
+    },
+
+    # ==========================================================
+    # NEW: Grade 2 Share (from updated document)
+    # ==========================================================
+    {
+        "name": "grade2_share_last",
+        "dtype": "float",
+        "synonyms": [
+            "5.5 What proportion of your harvest did you retain for own use/gifting last season (%)?",
+            "Grade 2 Share Last Season",
+            "Own use share",
+            "Proportion retained for own use",
+        ],
+    },
+    {
+        "name": "grade2_share_current",
+        "dtype": "float",
+        "synonyms": [
+            "5.9 What proportion of your harvest did you retain for own use/gifting this season (%)?",
+            "Grade 2 Share Current Season",
+        ],
+    },
+
+    # ==========================================================
+    # NEW: Fruits per tree metrics (for income per tree calculations)
+    # ==========================================================
+    {
+        "name": "fruits_per_tree_0_3",
+        "dtype": "float",
+        "synonyms": [
+            "4.8 Average No. of Fruits per avocado tree aged 0-3 years",
+            "Fruits per tree 0-3 years",
+        ],
+    },
+    {
+        "name": "fruits_per_tree_4_7",
+        "dtype": "float",
+        "synonyms": [
+            "4.81 Average No. of Fruits per avocado tree aged 4-7 years",
+            "Fruits per tree 4-7 years",
+        ],
+    },
+    {
+        "name": "fruits_per_tree_8_plus",
+        "dtype": "float",
+        "synonyms": [
+            "4.82 Average No. of Fruits per avocado tree aged 8+ years",
+            "Fruits per tree 8+ years",
+        ],
+    },
+    
+    # ==========================================================
+    # NEW: Yield per tree by age
+    # ==========================================================
+    {
+        "name": "yield_per_tree_0_3",
+        "dtype": "float",
+        "synonyms": [
+            "4.1 Average Yield per avocado Tree aged 0-3 years last season (kg)",
+            "Yield per tree 0-3 years",
+        ],
+    },
+    {
+        "name": "yield_per_tree_4_7",
+        "dtype": "float",
+        "synonyms": [
+            "4.11 Average Yield per avocado Tree aged 4-7 years last season (kg)",
+            "Yield per tree 4-7 years",
+        ],
+    },
+    {
+        "name": "yield_per_tree_8_plus",
+        "dtype": "float",
+        "synonyms": [
+            "4.12 Average Yield per avocado Tree aged 8+years last season (kg)",
+            "Yield per tree 8+ years",
+        ],
+    },
+    
     # Compliance
     {
         "name": "sanitation_tools",
@@ -247,6 +547,22 @@ EXTRA_FIELDS = [
         "synonyms": [
             "3.83 Biological Control",
             "Biological Control",
+        ],
+    },
+    {
+        "name": "pesticide_use",
+        "dtype": "bool",
+        "synonyms": [
+            "6.7 Use of Approved Pesticides Only",
+            "Approved pesticides",
+        ],
+    },
+    {
+        "name": "pesticide_compliance",
+        "dtype": "bool",
+        "synonyms": [
+            "6.6 Compliance with Pesticide Withdrawal Period (REI/ PHI)",
+            "Pesticide withdrawal compliance",
         ],
     },
     # Market
@@ -292,6 +608,22 @@ EXTRA_FIELDS = [
         ],
     },
     {
+        "name": "training_last_year",
+        "dtype": "string",
+        "synonyms": [
+            "8.1Training Received in the Last Year",
+            "Training last year",
+        ],
+    },
+    {
+        "name": "training_last_6months",
+        "dtype": "string",
+        "synonyms": [
+            "8.2 Training Received in the Last 6-months",
+            "Training last 6 months",
+        ],
+    },
+    {
         "name": "training_provider",
         "dtype": "string",
         "synonyms": [
@@ -313,6 +645,14 @@ EXTRA_FIELDS = [
         "synonyms": [
             "8.4 Extension Services Accessed",
             "Extension Services",
+        ],
+    },
+    {
+        "name": "training_needs_text",
+        "dtype": "string",
+        "synonyms": [
+            "8.6 What are your most pressing training/extension needs",
+            "Training needs",
         ],
     },
     # Sustainability
@@ -374,6 +714,14 @@ EXTRA_FIELDS = [
             "Primary Cause of Loss",
         ],
     },
+    {
+        "name": "loss_causes_other",
+        "dtype": "string",
+        "synonyms": [
+            "4.32 Other Causes of Loss last season",
+            "Other Loss Causes",
+        ],
+    },
 ]
 
 
@@ -385,7 +733,9 @@ def _add_extra_field(
     dtype: str,
     synonyms: List[str],
 ) -> None:
-    if name in out.columns and out[name].notna().any():
+    """Enhanced version with better error handling and logging."""
+    # Only skip if we have already successfully mapped this field
+    if name in used:
         return
 
     src = _find_matching_col(list(raw_df.columns), synonyms or [])
@@ -396,15 +746,21 @@ def _add_extra_field(
 
     used[name] = src
     s = raw_df[src]
-    if dtype == "float":
-        out[name] = _to_float_series(s)
-    elif dtype == "int":
-        out[name] = _to_float_series(s).round(0)
-    elif dtype == "bool":
-        out[name] = _to_bool_series(s)
-    elif dtype == "datetime":
-        out[name] = _to_datetime_series(s)
-    else:
+    
+    try:
+        if dtype == "float":
+            out[name] = _to_float_series(s)
+        elif dtype == "int":
+            out[name] = _to_float_series(s).round(0)
+        elif dtype == "bool":
+            out[name] = _to_bool_series(s)
+        elif dtype == "datetime":
+            out[name] = _to_datetime_series(s)
+        else:
+            out[name] = _to_str_series(s)
+    except Exception as e:
+        # Fallback to string if conversion fails
+        print(f"Warning: Failed to convert field {name} to {dtype}, using string. Error: {e}")
         out[name] = _to_str_series(s)
 
 
@@ -517,7 +873,10 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
             if "sub_county" not in used:
                 used["sub_county"] = "derived:1.4*_SubCounty_onehots"
 
-    # 4) Derived stability fields
+    # 4) AEZ assignment based on altitude
+    out["aez_zone"] = assign_aez_from_altitude(out)
+
+    # 5) Derived stability fields
     out["trees_per_acre"] = np.nan
     if "trees_total" in out.columns and "area_acres" in out.columns:
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -533,6 +892,56 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
         with np.errstate(divide="ignore", invalid="ignore"):
             out["yield_per_acre"] = out["harvest_kg"] / out["area_acres"]
 
+    # ==========================================================
+    # NEW: Additional derived metrics (from updated document)
+    # ==========================================================
+
+    # Income per Tree
+    out["income_per_tree"] = np.nan
+    if "income_ksh_last_season" in out.columns and "trees_total" in out.columns:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out["income_per_tree"] = out["income_ksh_last_season"] / out["trees_total"]
+
+    # Income per Tree by Age Group using yield data if available
+    out["income_per_tree_0_3"] = np.nan
+    out["income_per_tree_4_7"] = np.nan
+    out["income_per_tree_8_plus"] = np.nan
+    
+    # Try to use actual yield data first
+    if "hass_price_ksh_per_kg" in out.columns:
+        price = out["hass_price_ksh_per_kg"].fillna(0)
+        
+        if "yield_per_tree_0_3" in out.columns:
+            out["income_per_tree_0_3"] = out["yield_per_tree_0_3"] * price
+        elif "fruits_per_tree_0_3" in out.columns:
+            # Estimate kg per fruit (0.2 kg typical for Hass)
+            kg_per_fruit = 0.2
+            out["income_per_tree_0_3"] = out["fruits_per_tree_0_3"] * kg_per_fruit * price
+        
+        if "yield_per_tree_4_7" in out.columns:
+            out["income_per_tree_4_7"] = out["yield_per_tree_4_7"] * price
+        elif "fruits_per_tree_4_7" in out.columns:
+            kg_per_fruit = 0.2
+            out["income_per_tree_4_7"] = out["fruits_per_tree_4_7"] * kg_per_fruit * price
+        
+        if "yield_per_tree_8_plus" in out.columns:
+            out["income_per_tree_8_plus"] = out["yield_per_tree_8_plus"] * price
+        elif "fruits_per_tree_8_plus" in out.columns:
+            kg_per_fruit = 0.2
+            out["income_per_tree_8_plus"] = out["fruits_per_tree_8_plus"] * kg_per_fruit * price
+
+    # Total Grade 1 + Grade 2 should equal 100% (for validation)
+    out["grade_total_completeness"] = np.nan
+    if "grade1_share_last" in out.columns and "grade2_share_last" in out.columns:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out["grade_total_completeness"] = out["grade1_share_last"] + out["grade2_share_last"]
+
+    # Organic users vs Organic certified comparison flag
+    out["organic_alignment"] = np.nan
+    if "fertilizer_organic" in out.columns and "cert_organic" in out.columns:
+        # Flag farms that use organic fertilizer but are NOT organically certified
+        out["organic_alignment"] = (out["fertilizer_organic"] == True) & (out["cert_organic"] == False)
+
     def _dominant_age(row) -> str:
         a = row.get("trees_0_3", np.nan)
         b = row.get("trees_4_7", np.nan)
@@ -544,6 +953,31 @@ def map_to_canonical(raw_df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str]
         return max(vals2, key=vals2.get)
 
     out["dominant_age_group"] = out.apply(_dominant_age, axis=1)
+    
+    # Farm size classification
+    out["farm_size_classification"] = "Unknown"
+    if "area_acres" in out.columns:
+        def classify_farm_size(acres):
+            if pd.isna(acres):
+                return "Unknown"
+            if acres < 2:
+                return "Micro (0-2 acres)"
+            elif acres < 10:
+                return "Small (2-10 acres)"
+            elif acres < 50:
+                return "Medium (10-50 acres)"
+            else:
+                return "Large (50+ acres)"
+        out["farm_size_classification"] = out["area_acres"].apply(classify_farm_size)
+    
+    # IPM adoption completeness score (0-100%)
+    ipm_components = ["ipm_traps", "ipm_chemical", "ipm_biological", "ipm_mating_disruption", "ipm_pest_monitoring"]
+    ipm_available = [c for c in ipm_components if c in out.columns]
+    if ipm_available:
+        out["ipm_adoption_score"] = out[ipm_available].fillna(False).astype(bool).mean(axis=1) * 100
+    
+    # GACC Progress Tracking
+    out["is_gacc_approved"] = out.get("gacc_status", pd.Series([False] * len(out))).fillna(False).astype(bool)
 
     out = out.replace([np.inf, -np.inf], np.nan)
     return out, used
@@ -579,6 +1013,8 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
             "Certifications": pd.DataFrame(),
             "Training Needs": pd.DataFrame(),
             "Market Summary": pd.DataFrame(),
+            "GACC Tracking": pd.DataFrame(),
+            "AEZ Distribution": pd.DataFrame(),
         }
 
     agg_spec = dict(
@@ -593,6 +1029,12 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
     if "yield_per_acre" in d.columns:
         agg_spec["Median_Yield_Kg_per_Acre"] = ("yield_per_acre", "median")
+
+    if "income_per_acre" in d.columns:
+        agg_spec["Median_Income_KSh_per_Acre"] = ("income_per_acre", "median")
+
+    if "income_per_tree" in d.columns:
+        agg_spec["Median_Income_KSh_per_Tree"] = ("income_per_tree", "median")
 
     metrics = (
         d.groupby("exporter", dropna=False)
@@ -613,6 +1055,16 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         "cert_globalgap",
         "cert_organic",
         "cert_fairtrade",
+        # NEW: Additional compliance fields
+        "dropped_fruits_elimination",
+        "weed_management",
+        "pruning_practices",
+        "ipm_traps",
+        "ipm_chemical",
+        "ipm_biological",
+        "ipm_mating_disruption",
+        "ipm_pest_monitoring",
+        "ipm_adoption_score",
     ]
     cert = d[[c for c in cert_cols if c in d.columns]].copy()
 
@@ -641,6 +1093,7 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
             top_outlet = outlet.value_counts().index[0] if len(outlet) else ""
 
             prices = pd.to_numeric(g.get("hass_price_ksh_per_kg", pd.Series(dtype="float")), errors="coerce").dropna()
+            current_prices = pd.to_numeric(g.get("hass_price_current_ksh_per_kg", pd.Series(dtype="float")), errors="coerce").dropna()
             incomes = pd.to_numeric(g.get("income_ksh_last_season", pd.Series(dtype="float")), errors="coerce").dropna()
 
             market_rows.append(
@@ -648,10 +1101,50 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
                     "Exporter": exp,
                     "Top_Outlet": top_outlet,
                     "Median_Hass_Price_KSh_per_Kg": float(prices.median()) if len(prices) else np.nan,
+                    "Median_Hass_Price_Current_KSh_per_Kg": float(current_prices.median()) if len(current_prices) else np.nan,
                     "Median_Income_KSh_Last_Season": float(incomes.median()) if len(incomes) else np.nan,
                 }
             )
     market = pd.DataFrame(market_rows)
+    
+    # ==========================================================
+    # NEW: GACC Tracking Sheet
+    # ==========================================================
+    if "is_gacc_approved" in d.columns:
+        gacc_tracking = pd.DataFrame({
+            "Metric": [
+                "SHAPe GACC Approved Farms (Current)",
+                "Total KEPHIS-China Coded Farms in Kenya (External Reference)",
+                "Newly Inspected Farms (External Reference)",
+                "SHAPe % of National Total",
+            ],
+            "Value": [
+                int(d["is_gacc_approved"].sum()),
+                270,  # External reference - total KEPHIS-China coded farms in Kenya
+                41,   # External reference - newly inspected farms
+                f"{(int(d['is_gacc_approved'].sum()) / 270 * 100):.1f}%" if int(d['is_gacc_approved'].sum()) > 0 else "0%",
+            ]
+        })
+    else:
+        gacc_tracking = pd.DataFrame(columns=["Metric", "Value"])
+    
+    # ==========================================================
+    # NEW: AEZ Distribution Sheet
+    # ==========================================================
+    if "aez_zone" in d.columns:
+        aez_dist = d["aez_zone"].value_counts().reset_index()
+        aez_dist.columns = ["AEZ Zone", "Number of Farms"]
+        aez_dist["Percentage"] = (aez_dist["Number of Farms"] / len(d) * 100).round(1)
+        
+        # Add altitude distribution by AEZ
+        if "altitude" in d.columns:
+            aez_altitude = d.groupby("aez_zone")["altitude"].agg(["count", "mean", "min", "max"]).reset_index()
+            aez_altitude.columns = ["AEZ Zone", "Farm Count", "Mean Altitude (m)", "Min Altitude (m)", "Max Altitude (m)"]
+        else:
+            aez_altitude = pd.DataFrame()
+    else:
+        aez_dist = pd.DataFrame()
+        aez_altitude = pd.DataFrame()
 
     return {
         "Baseline": d,
@@ -659,6 +1152,9 @@ def build_derived_sheets(canonical_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         "Certifications": cert,
         "Training Needs": training,
         "Market Summary": market,
+        "GACC Tracking": gacc_tracking,
+        "AEZ Distribution": aez_dist,
+        "AEZ Altitude": aez_altitude,
     }
 
 
@@ -681,7 +1177,7 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
         if f not in d.columns or d[f].isna().all():
             missing_required.append(f)
 
-    recommended_fields = list(dict.fromkeys(list(RECOMMENDED_FOR_EXEC) + ["harvest_kg", "yield_per_acre"]))
+    recommended_fields = list(dict.fromkeys(list(RECOMMENDED_FOR_EXEC) + ["harvest_kg", "yield_per_acre", "income_per_acre", "income_per_tree", "education", "experience"]))
     cov = []
     for f in recommended_fields:
         if f not in d.columns:
@@ -710,6 +1206,12 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
 
     if "harvest_kg" not in d.columns or d["harvest_kg"].notna().sum() == 0:
         flags.append("Harvest (kg) is missing/empty (yield analytics will be limited).")
+    
+    if "education" not in d.columns or d["education"].notna().sum() == 0:
+        flags.append("Education data not available - column mapping may need adjustment.")
+    
+    if "experience" not in d.columns or d["experience"].notna().sum() == 0:
+        flags.append("Experience data not available - column mapping may need adjustment.")
 
     return {
         "rows": rows,
@@ -723,9 +1225,10 @@ def coverage_diagnostics(canonical_df: pd.DataFrame, used_mapping: Dict[str, str
 def build_export_workbook_bytes(sheets: Dict[str, pd.DataFrame], report: Dict[str, Any]) -> bytes:
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        for name in ["Baseline", "Metrics", "Certifications", "Training Needs", "Market Summary"]:
+        for name in ["Baseline", "Metrics", "Certifications", "Training Needs", "Market Summary", "GACC Tracking", "AEZ Distribution", "AEZ Altitude"]:
             df = sheets.get(name, pd.DataFrame())
-            df.to_excel(writer, sheet_name=name[:31], index=False)
+            if not df.empty:
+                df.to_excel(writer, sheet_name=name[:31], index=False)
 
         cov = pd.DataFrame(report.get("coverage", []))
         cov.to_excel(writer, sheet_name="Data_Quality_Report", index=False)
