@@ -106,10 +106,10 @@ def _to_float_series(s: pd.Series) -> pd.Series:
 def _to_str_series(s: pd.Series) -> pd.Series:
     return s.astype("string").fillna("").str.strip()
 
-
 def _to_datetime_series(s: pd.Series) -> pd.Series:
-    return pd.to_datetime(s, errors="coerce", infer_datetime_format=True)
-
+    if s is None:
+        return pd.Series(dtype="datetime64[ns]")
+    return pd.to_datetime(s, errors="coerce")
 
 # ==========================================================
 # AEZ Mapping Function
