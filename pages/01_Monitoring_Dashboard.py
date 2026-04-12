@@ -12,18 +12,13 @@ from core.sections_monitoring import (
     show_production_metrics,
     show_market_analysis,
     show_training_needs,
-    show_investor_income_view,
-    show_income_potential_forecast,
     show_sustainability,
-    # NEW: Enhanced sections
     show_geo_spatial_aez,
     show_farmer_profile,
     show_farm_characteristics,
     show_productivity_efficiency,
     show_enhanced_compliance,
     show_ipm_measures,
-    show_gacc_progress,
-    show_organic_alignment,
     show_grade_completeness,
 )
 
@@ -39,7 +34,6 @@ def _pick_first_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
         key = cand.lower().strip()
         if key in cols:
             return cols[key]
-    # also allow direct exact match
     for cand in candidates:
         if cand in df.columns:
             return cand
@@ -52,10 +46,6 @@ def _to_csv_bytes(df: pd.DataFrame) -> bytes:
 
 
 def _apply_geo_filters(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Optional operational filters (only when columns exist).
-    Works for canonical schema OR legacy survey columns.
-    """
     geo_cols = {
         "county": ["county", "1.2 County", "County", "county_name"],
         "subcounty": ["sub_county", "Sub_County", "Sub County", "1.3 Sub County", "subcounty"],
@@ -94,12 +84,85 @@ def main():
     logout_button()
     perms = permissions(user)
 
-    st.title("🥑 SHAPe Avocado Dashboard")
-    st.caption("Monitoring Kenya's avocado value chain for export excellence")
+    st.markdown("""
+        <style>
+            .main .block-container {
+                padding-top: 0rem !important;
+            }
+            
+            .fixed-header-space {
+                height: 120px;
+            }
+            
+            .main .block-container {
+                padding-top: 0rem !important;
+            }
+            
+            header[data-testid="stHeader"] {
+                display: none;
+            }
+            
+            .fixed-header-space {
+                height: 20px;
+            }
+            
+            .fixed-header {
+                position: fixed;
+                top: 0;
+                left: 240px;
+                right: 0;
+                background-color: white;
+                z-index: 9999;
+                padding: 15px 20px 15px 20px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-bottom: 2px solid #e0e0e0;
+            }
+            
+            .fixed-header h1 {
+                margin: 0 0 8px 0;
+                padding: 0;
+                font-size: 2rem;
+                line-height: 1.2;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    subtitle_text = "📊 Tracking Kenya's Avocado Export Performance | GACC Approved: Tracking | Market Prices: Live | Farm Compliance: Monitoring | Yield Trends: Analyzing"
+    
+    st.markdown(f"""
+        <div class="fixed-header">
+            <h1>🥑 SHAPe Avocado Dashboard</h1>
+            <div style="
+                background-color: #f0f2f6;
+                padding: 8px;
+                border-radius: 5px;
+                overflow: hidden;
+                white-space: nowrap;
+                font-family: monospace;
+                font-size: 14px;
+                color: #1f77b4;
+            ">
+                <div style="
+                    display: inline-block;
+                    animation: scroll 25s linear infinite;
+                    padding-left: 100%;
+                ">
+                    {subtitle_text} &nbsp;&nbsp;|&nbsp;&nbsp; 
+                    📈 Export Excellence | 🌍 Global Market Access | 🥑 Quality Assured
+                </div>
+            </div>
+        </div>
+        
+        <div class="fixed-header-space"></div>
+        
+        <style>
+        @keyframes scroll {{
+            0% {{ transform: translate(0, 0); }}
+            100% {{ transform: translate(-100%, 0); }}
+        }}
+        </style>
+    """, unsafe_allow_html=True)
 
-    # -----------------------------
-    # Data intake (Smart Loader)
-    # -----------------------------
     with st.sidebar:
         st.markdown("## Data intake")
         uploaded = st.file_uploader(
@@ -115,12 +178,10 @@ def main():
         st.warning("No data loaded yet. Upload an Excel workbook to begin.")
         return
 
-    # ✅ FIX: do NOT use a DataFrame in boolean `or`
     metrics_df = pkg.sheets.get("Metrics")
     if metrics_df is None or not isinstance(metrics_df, pd.DataFrame):
         metrics_df = pd.DataFrame()
 
-    # Download regenerated workbook (in-memory)
     with st.sidebar:
         st.download_button(
             "⬇️ Download regenerated shape_data.xlsx",
@@ -139,9 +200,6 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("## Filters")
 
-    # ---------------------------------
-    # Exporter scope enforcement
-    # ---------------------------------
     exporter_col = _pick_first_col(farmer_df, ["exporter", "1.1 Company Name", "Exporter", "Company"])
     if not exporter_col:
         st.error("Exporter field not detected (expected canonical `exporter` or raw `1.1 Company Name`).")
@@ -171,18 +229,14 @@ def main():
         st.sidebar.markdown("### Exporter")
         st.sidebar.info(f"{selected_company}")
 
-    # -----------------
-    # Date range filter
-    # -----------------
     st.sidebar.markdown("### Date range")
 
     filtered_df = scoped_df.copy()
 
-    # Support canonical submit_date OR legacy submitdate already created
     submit_col = _pick_first_col(filtered_df, ["submitdate", "submit_date", "data_time", "SubmissionDate", "Date of interview:"])
     if submit_col and submit_col in filtered_df.columns:
         dt = pd.to_datetime(filtered_df[submit_col], errors="coerce")
-        filtered_df["submitdate"] = dt  # normalize for downstream code
+        filtered_df["submitdate"] = dt
     else:
         filtered_df["submitdate"] = pd.NaT
 
@@ -206,80 +260,44 @@ def main():
     else:
         st.sidebar.caption("No submission dates detected.")
 
-    # -----------------
-    # Geo filters (ops)
-    # -----------------
     filtered_df = _apply_geo_filters(filtered_df)
 
     if filtered_df.empty:
         st.warning("No records match the selected filters.")
         return
 
-    # ==========================================================
-    # Monitoring sections - Enhanced with all new sections
-    # ==========================================================
-    
-    # Section 1: Overview (existing)
     show_overview(filtered_df, metrics_df)
     
-    # Section 2: Geo-Spatial & AEZ (NEW)
     with st.expander("🌍 Geo-Spatial & Agro-Ecological Zones", expanded=False):
         show_geo_spatial_aez(filtered_df)
     
-    # Section 3: Farmer Profile (NEW)
-    with st.expander("👥 Farmer Profile", expanded=False):
-        show_farmer_profile(filtered_df)
+    show_farmer_profile(filtered_df)
     
-    # Section 4: Farm Characteristics (NEW)
     with st.expander("🌱 Farm Characteristics", expanded=False):
         show_farm_characteristics(filtered_df)
     
-    # Section 5: Productivity & Efficiency (NEW)
     with st.expander("📈 Productivity & Efficiency", expanded=False):
         show_productivity_efficiency(filtered_df)
     
-    # Section 6: Certification & Compliance (existing)
+    show_production_metrics(filtered_df)
+    
     show_certification(filtered_df)
     
-    # Section 7: Enhanced Compliance (NEW)
     with st.expander("✅ Enhanced Compliance Metrics", expanded=False):
         show_enhanced_compliance(filtered_df)
     
-    # Section 8: IPM Measures (NEW)
-    with st.expander("🐛 Integrated Pest Management (IPM) Measures", expanded=False):
+    with st.expander("🪰 Integrated Pest Management (IPM) Measures", expanded=False):
         show_ipm_measures(filtered_df)
     
-    # Section 9: Production Metrics (existing)
-    show_production_metrics(filtered_df)
-    
-    # Section 10: Grade Completeness (NEW)
     with st.expander("📊 Grade Completeness Analysis", expanded=False):
         show_grade_completeness(filtered_df)
     
-    # Section 11: Market Access (existing)
     show_market_analysis(filtered_df)
     
-    # Section 12: GACC Progress Tracking (NEW)
-    with st.expander("🌐 GACC Progress Tracking", expanded=False):
-        show_gacc_progress(filtered_df)
-    
-    # Section 13: Organic Alignment (NEW)
-    with st.expander("🌱 Organic Alignment", expanded=False):
-        show_organic_alignment(filtered_df)
-    
-    # Section 14: Training Needs (existing)
-    show_training_needs(filtered_df)
-    
-    # Section 15: Investor Views (existing)
-    show_investor_income_view(filtered_df)
-    show_income_potential_forecast(filtered_df)
-    
-    # Section 16: Sustainability (existing)
     show_sustainability(filtered_df)
+    
+    show_training_needs(filtered_df)
 
-    # -----------------
-    # Data explorer (admin only)
-    # -----------------
     st.subheader("Data Explorer")
     if perms.get("can_view_raw_data"):
         if st.checkbox("Show raw data"):
@@ -287,9 +305,6 @@ def main():
     else:
         st.caption("Raw data is restricted to admin users.")
 
-    # -----------------
-    # Export (filtered CSV)
-    # -----------------
     st.download_button(
         "Download filtered data (CSV)",
         data=_to_csv_bytes(filtered_df),

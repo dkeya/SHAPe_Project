@@ -434,50 +434,92 @@ def show_geo_spatial_aez(df: pd.DataFrame):
         st.info("AEZ data not available. Ensure altitude data is present for AEZ classification.")
 
 def show_farmer_profile(df: pd.DataFrame):
-    """NEW: Display farmer profile metrics (gender, age, education, experience)."""
-    st.subheader("👥 Farmer Profile")
+    """Display farmer profile metrics (gender, age, education, experience) - Visible section."""
     d = _ensure_derived(df)
 
+    # First row: summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if CAN["gender"] in d.columns:
+            gender_series = _safe_str(d, CAN["gender"]).str.lower()
+            female = int(gender_series.eq("female").sum())
+            male = int(gender_series.eq("male").sum())
+            st.metric("👩 Female Farmers", f"{female} ({female/len(d)*100:.0f}%)" if len(d) > 0 else "N/A")
+        else:
+            st.caption("Gender data not available")
+
+    with col2:
+        if CAN["age"] in d.columns:
+            ages = _safe_num(d, CAN["age"]).dropna()
+            avg_age = ages.mean()
+            st.metric("📊 Avg. Farmer Age", f"{avg_age:.0f} years" if not pd.isna(avg_age) else "N/A")
+        else:
+            st.caption("Age data not available")
+
+    with col3:
+        if CAN["education"] in d.columns:
+            edu = _safe_str(d, CAN["education"])
+            edu_counts = edu[edu != ""].value_counts()
+            if not edu_counts.empty:
+                top_edu = edu_counts.index[0]
+                st.metric("🎓 Most Common Education", top_edu[:20])
+            else:
+                st.caption("Education data not available")
+        else:
+            st.caption("Education data not available")
+
+    with col4:
+        if CAN["experience"] in d.columns:
+            exp_years = _safe_num(d, CAN["experience"]).dropna()
+            avg_exp = exp_years.mean()
+            st.metric("🌱 Avg. Avocado Farming Experience", f"{avg_exp:.1f} years" if not pd.isna(avg_exp) else "N/A")
+        else:
+            st.caption("Experience data not available")
+
+    # Second row: detailed distributions (gender pie, age histogram, education bar, experience histogram)
+    st.markdown("---")
+    st.markdown("**📊 Detailed Farmer Profile**")
+    
     col1, col2 = st.columns(2)
 
     with col1:
-        # Gender distribution
+        # Gender distribution (pie chart)
         if CAN["gender"] in d.columns:
             gender_series = _safe_str(d, CAN["gender"]).str.lower()
             gender_counts = gender_series.value_counts().reset_index()
             gender_counts.columns = ["Gender", "Count"]
             
-            chart = alt.Chart(gender_counts).mark_bar().encode(
-                x="Gender:N",
-                y="Count:Q",
-                color="Gender:N",
-                tooltip=["Gender", "Count"]
-            ).properties(title="Gender Distribution", height=300)
-            st.altair_chart(chart, use_container_width=True)
+            if not gender_counts.empty:
+                chart = alt.Chart(gender_counts).mark_arc().encode(
+                    theta=alt.Theta("Count:Q", stack=True),
+                    color=alt.Color("Gender:N", scale=alt.Scale(scheme="set2")),
+                    tooltip=["Gender", "Count"]
+                ).properties(title="Gender Distribution", height=250)
+                st.altair_chart(chart, use_container_width=True)
 
     with col2:
-        # Age distribution
+        # Age distribution (histogram)
         if CAN["age"] in d.columns:
             ages = _safe_num(d, CAN["age"]).dropna()
             if not ages.empty:
                 age_data = pd.DataFrame({"Age": ages})
-                chart = alt.Chart(age_data).mark_bar().encode(
-                    x=alt.X("Age:Q", bin=alt.Bin(maxbins=30)),
-                    y="count()",
+                chart = alt.Chart(age_data).mark_bar(color="#4ECDC4").encode(
+                    x=alt.X("Age:Q", bin=alt.Bin(maxbins=20), title="Age (years)"),
+                    y=alt.Y("count()", title="Number of Farmers"),
                     tooltip=["count()"]
-                ).properties(title="Age Distribution", height=300)
+                ).properties(title="Age Distribution", height=250)
                 st.altair_chart(chart, use_container_width=True)
 
-    # Education and Experience
+    # Third row: Education and Experience details
     col3, col4 = st.columns(2)
 
     with col3:
-        # Education level
+        # Education level distribution
         if CAN["education"] in d.columns:
             edu_series = _safe_str(d, CAN["education"])
             edu_clean = edu_series.str.lower().str.strip()
             
-            # Map education levels
             edu_map = {
                 "none": "None",
                 "primary": "Primary",
@@ -499,17 +541,8 @@ def show_farmer_profile(df: pd.DataFrame):
                     y="Count:Q",
                     color="Education Level:N",
                     tooltip=["Education Level", "Count"]
-                ).properties(title="Education Level Distribution", height=300)
+                ).properties(title="Education Level Distribution", height=250)
                 st.altair_chart(chart, use_container_width=True)
-                
-                # Show data availability
-                edu_coverage = (d[CAN["education"]].notna().sum() / len(d) * 100)
-                if edu_coverage < 80:
-                    st.caption(f"⚠️ Education data available for {edu_coverage:.1f}% of farmers")
-            else:
-                st.info("Education data not available")
-        else:
-            st.info("Education data not available")
 
     with col4:
         # Experience distribution
@@ -517,11 +550,11 @@ def show_farmer_profile(df: pd.DataFrame):
             exp_years = _safe_num(d, CAN["experience"]).dropna()
             if not exp_years.empty:
                 exp_data = pd.DataFrame({"Experience (years)": exp_years})
-                chart = alt.Chart(exp_data).mark_bar().encode(
-                    x=alt.X("Experience (years):Q", bin=alt.Bin(maxbins=20)),
-                    y="count()",
+                chart = alt.Chart(exp_data).mark_bar(color="#F38181").encode(
+                    x=alt.X("Experience (years):Q", bin=alt.Bin(maxbins=15), title="Experience (years)"),
+                    y=alt.Y("count()", title="Number of Farmers"),
                     tooltip=["count()"]
-                ).properties(title="Farming Experience Distribution", height=300)
+                ).properties(title="Farming Experience Distribution", height=250)
                 st.altair_chart(chart, use_container_width=True)
                 
                 # Experience statistics
@@ -539,114 +572,191 @@ def show_farmer_profile(df: pd.DataFrame):
 
 
 def show_farm_characteristics(df: pd.DataFrame):
-    """NEW: Display farm characteristics (size, varieties, tree age distribution)."""
+    """Display farm characteristics - avocado area, tree age distribution prominently."""
     st.subheader("🌱 Farm Characteristics")
     d = _ensure_derived(df)
 
+    # First row: Key metrics about avocado area
+    st.markdown("**🥑 Avocado Area & Tree Density**")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if CAN["area"] in d.columns:
+            total_avocado_area = d[CAN["area"]].sum()
+            avg_avocado_area = d[CAN["area"]].mean()
+            st.metric("Total Avocado Area", f"{total_avocado_area:,.2f} acres")
+            st.metric("Avg. Avocado Area per Farm", f"{avg_avocado_area:.2f} acres")
+        else:
+            st.caption("Avocado area data not available")
+
+    with col2:
+        if CAN["trees"] in d.columns:
+            total_trees = d[CAN["trees"]].sum()
+            avg_trees = d[CAN["trees"]].mean()
+            st.metric("Total Avocado Trees", f"{total_trees:,.0f}")
+            st.metric("Avg. Trees per Farm", f"{avg_trees:.0f}")
+        else:
+            st.caption("Tree count data not available")
+
+    with col3:
+        if CAN["trees_per_acre"] in d.columns:
+            trees_per_acre = _safe_num(d, CAN["trees_per_acre"]).dropna()
+            if not trees_per_acre.empty:
+                st.metric("Avg. Trees per Acre", f"{trees_per_acre.mean():.0f}")
+                st.metric("Median Trees per Acre", f"{trees_per_acre.median():.0f}")
+            else:
+                st.caption("Trees per acre data not available")
+        else:
+            st.caption("Trees per acre data not available")
+
+    # Second row: Farm size classification (by avocado area)
+    st.markdown("---")
+    st.markdown("**📊 Farm Size Classification (by Avocado Area)**")
+    
     col1, col2 = st.columns(2)
 
     with col1:
-        # Farm size classification
         if CAN["farm_size_classification"] in d.columns:
             size_counts = d[CAN["farm_size_classification"]].value_counts().reset_index()
             size_counts.columns = ["Farm Size", "Count"]
             
             chart = alt.Chart(size_counts).mark_bar().encode(
-                x="Farm Size:N",
-                y="Count:Q",
+                x=alt.X("Farm Size:N", sort=["Micro-Small", "Medium", "Large"]),
+                y=alt.Y("Count:Q", title="Number of Farms"),
                 color="Farm Size:N",
                 tooltip=["Farm Size", "Count"]
-            ).properties(title="Farm Size Distribution", height=300)
+            ).properties(title="Farm Size Distribution (by Avocado Area)", height=300)
             st.altair_chart(chart, use_container_width=True)
+        else:
+            st.caption("Farm size classification not available")
 
     with col2:
+        # Orchard group registration
+        if CAN["orchard_group"] in d.columns:
+            group_reg = int(_safe_bool(d, CAN["orchard_group"]).sum())
+            st.metric("🤝 Registered in Farmer Group", f"{group_reg} ({group_reg/len(d)*100:.0f}%)")
+        
         # Variety distribution (Hass adoption)
         if "variety_hass" in d.columns:
             hass_count = int(_safe_bool(d, "variety_hass").sum())
-            st.metric("Hass Variety Adoption", f"{hass_count} ({hass_count/len(d)*100:.0f}%)")
+            st.metric("🥑 Hass Variety Adoption", f"{hass_count} ({hass_count/len(d)*100:.0f}%)")
 
-    # Tree age distribution
+    # Tree Age Distribution - PROMINENT section (full width, no expander)
+    st.markdown("---")
     st.markdown("### 🌳 Tree Age Distribution")
+    
     if all(c in d.columns for c in [CAN["trees_0_3"], CAN["trees_4_7"], CAN["trees_8_plus"]]):
+        # Calculate tree counts by age group
+        trees_0_3 = d[CAN["trees_0_3"]].sum()
+        trees_4_7 = d[CAN["trees_4_7"]].sum()
+        trees_8_plus = d[CAN["trees_8_plus"]].sum()
+        
         age_data = {
-            "Age Group": ["0-3 years", "4-7 years", "8+ years"],
-            "Tree Count": [
-                d[CAN["trees_0_3"]].sum(),
-                d[CAN["trees_4_7"]].sum(),
-                d[CAN["trees_8_plus"]].sum(),
-            ],
+            "Age Group": ["0-3 years (Young)", "4-7 years (Productive)", "8+ years (Mature)"],
+            "Tree Count": [trees_0_3, trees_4_7, trees_8_plus],
+            "Percentage": [trees_0_3/(trees_0_3+trees_4_7+trees_8_plus)*100 if (trees_0_3+trees_4_7+trees_8_plus) > 0 else 0,
+                          trees_4_7/(trees_0_3+trees_4_7+trees_8_plus)*100 if (trees_0_3+trees_4_7+trees_8_plus) > 0 else 0,
+                          trees_8_plus/(trees_0_3+trees_4_7+trees_8_plus)*100 if (trees_0_3+trees_4_7+trees_8_plus) > 0 else 0]
         }
         age_df = pd.DataFrame(age_data)
-
-        chart = alt.Chart(age_df).mark_bar().encode(
-            x="Age Group:N",
-            y="Tree Count:Q",
-            color="Age Group:N",
-            tooltip=["Age Group", "Tree Count"]
-        ).properties(title="Total Trees by Age Group", height=380)
-        st.altair_chart(chart, use_container_width=True)
-
-        # Dominant age group
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Bar chart for tree counts
+            chart = alt.Chart(age_df).mark_bar().encode(
+                x=alt.X("Age Group:N", sort=["0-3 years (Young)", "4-7 years (Productive)", "8+ years (Mature)"]),
+                y=alt.Y("Tree Count:Q", title="Number of Trees"),
+                color="Age Group:N",
+                tooltip=["Age Group", "Tree Count"]
+            ).properties(title="Total Trees by Age Group", height=350)
+            st.altair_chart(chart, use_container_width=True)
+        
+        with col2:
+            # Pie chart for percentage distribution
+            chart2 = alt.Chart(age_df).mark_arc().encode(
+                theta=alt.Theta("Percentage:Q", stack=True),
+                color=alt.Color("Age Group:N", scale=alt.Scale(scheme="set2")),
+                tooltip=["Age Group", alt.Tooltip("Percentage:Q", format=".1f"), alt.Tooltip("Tree Count:Q", format=",.0f")]
+            ).properties(title="Tree Age Distribution (%)", height=350)
+            st.altair_chart(chart2, use_container_width=True)
+        
+        # Dominant age group summary
         if CAN["dominant_age"] in d.columns:
             dom_counts = d[CAN["dominant_age"]].value_counts().reset_index()
             dom_counts.columns = ["Dominant Age Group", "Count"]
             dom_counts = dom_counts[dom_counts["Dominant Age Group"] != ""]
             
             if not dom_counts.empty:
-                chart = alt.Chart(dom_counts).mark_bar().encode(
-                    x="Dominant Age Group:N",
-                    y="Count:Q",
-                    color="Dominant Age Group:N"
-                ).properties(title="Dominant Tree Age Group by Farm", height=300)
-                st.altair_chart(chart, use_container_width=True)
+                st.markdown("**Most Common Dominant Tree Age Group by Farm:**")
+                for _, row in dom_counts.iterrows():
+                    st.write(f"- {row['Dominant Age Group']}: {row['Count']} farms ({row['Count']/len(d)*100:.1f}%)")
     else:
-        st.info("Tree age distribution data not available")
+        st.info("Tree age distribution data not available (requires trees_0_3, trees_4_7, trees_8_plus columns)")
 
 
 def show_productivity_efficiency(df: pd.DataFrame):
-    """NEW: Show productivity and efficiency metrics (Yield/Acre, Income/Acre, Income/Tree)."""
-    st.subheader("📊 Productivity & Efficiency")
+    """Prominent Productivity & Efficiency section with consolidated income analysis."""
+    st.subheader("📈 Productivity & Efficiency")
     d = _ensure_derived(df)
 
-    col1, col2, col3 = st.columns(3)
-
+    # ==========================================================
+    # STANDOUT METRICS: Yield per Acre & Income per Acre
+    # ==========================================================
+    st.markdown("### 🎯 Key Performance Indicators")
+    
+    col1, col2 = st.columns(2)
+    
     with col1:
-        # Yield per Acre
+        # Yield per Acre - STANDOUT
         if CAN["yield_per_acre"] in d.columns:
             yield_acre = _safe_num(d, CAN["yield_per_acre"]).dropna()
-            # Remove extreme outliers for better display
             if len(yield_acre) > 10:
                 q99 = yield_acre.quantile(0.99)
                 yield_acre = yield_acre[yield_acre <= q99]
             if not yield_acre.empty:
-                st.metric("Avg. Yield per Acre", f"{yield_acre.mean():,.0f} kg/acre")
-                st.metric("Median Yield per Acre", f"{yield_acre.median():,.0f} kg/acre")
+                st.metric(
+                    "🌾 **AVERAGE YIELD PER ACRE**", 
+                    f"{yield_acre.mean():,.0f} kg/acre",
+                    help="Average harvest per acre across all farms"
+                )
+                st.caption(f"Median: {yield_acre.median():,.0f} kg/acre | Range: {yield_acre.min():,.0f} - {yield_acre.max():,.0f} kg/acre")
             else:
                 st.caption("Yield per acre data not available")
         else:
             st.caption("Yield per acre data not available")
-
+    
     with col2:
-        # Income per Acre
+        # Income per Acre - STANDOUT
         if CAN["income_per_acre"] in d.columns:
             income_acre = _safe_num(d, CAN["income_per_acre"]).dropna()
-            # Remove extreme outliers
             if len(income_acre) > 10:
                 q99 = income_acre.quantile(0.99)
                 income_acre = income_acre[income_acre <= q99]
             if not income_acre.empty:
-                st.metric("Avg. Income per Acre", f"KSh {income_acre.mean():,.0f}")
-                st.metric("Median Income per Acre", f"KSh {income_acre.median():,.0f}")
+                st.metric(
+                    "💰 **AVERAGE INCOME PER ACRE**", 
+                    f"KSh {income_acre.mean():,.0f}",
+                    help="Average income per acre across all farms"
+                )
+                st.caption(f"Median: KSh {income_acre.median():,.0f} | Range: KSh {income_acre.min():,.0f} - {income_acre.max():,.0f}")
             else:
                 st.caption("Income per acre data not available")
         else:
             st.caption("Income per acre data not available")
 
-    with col3:
+    # ==========================================================
+    # ADDITIONAL METRICS: Income per Tree
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 💰 Additional Income Metrics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
         # Income per Tree
         if CAN["income_per_tree"] in d.columns:
             income_tree = _safe_num(d, CAN["income_per_tree"]).dropna()
-            # Remove extreme outliers
             if len(income_tree) > 10:
                 q99 = income_tree.quantile(0.99)
                 income_tree = income_tree[income_tree <= q99]
@@ -657,45 +767,46 @@ def show_productivity_efficiency(df: pd.DataFrame):
                 st.caption("Income per tree data not available")
         else:
             st.caption("Income per tree data not available")
+    
+    with col2:
+        # Income per Tree by Age Group
+        st.markdown("**Income per Tree by Age Group**")
+        income_age_data = []
+        
+        for age_group, col_name in [
+            ("0-3 years", "income_per_tree_0_3"),
+            ("4-7 years", "income_per_tree_4_7"),
+            ("8+ years", "income_per_tree_8_plus"),
+        ]:
+            if col_name in d.columns:
+                valid_data = _safe_num(d, col_name).dropna()
+                if len(valid_data) > 10:
+                    q99 = valid_data.quantile(0.99)
+                    valid_data = valid_data[valid_data <= q99]
+                if not valid_data.empty:
+                    income_age_data.append({
+                        "Age Group": age_group,
+                        "Median Income (KSh)": valid_data.median(),
+                    })
+        
+        if income_age_data:
+            income_age_df = pd.DataFrame(income_age_data)
+            chart = alt.Chart(income_age_df).mark_bar().encode(
+                x="Age Group:N",
+                y="Median Income (KSh):Q",
+                color="Age Group:N",
+                tooltip=["Age Group", "Median Income (KSh)"]
+            ).properties(title="Median Income per Tree by Age Group", height=250)
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.caption("Income per tree by age group data not available")
 
-    # Income per Tree by Age Group
-    st.markdown("---")
-    st.markdown("### 💰 Income per Tree by Age Group")
-    income_age_data = []
-
-    for age_group, col_name in [
-        ("0-3 years", "income_per_tree_0_3"),
-        ("4-7 years", "income_per_tree_4_7"),
-        ("8+ years", "income_per_tree_8_plus"),
-    ]:
-        if col_name in d.columns:
-            valid_data = _safe_num(d, col_name).dropna()
-            # Remove extreme outliers
-            if len(valid_data) > 10:
-                q99 = valid_data.quantile(0.99)
-                valid_data = valid_data[valid_data <= q99]
-            if not valid_data.empty:
-                income_age_data.append({
-                    "Age Group": age_group,
-                    "Median Income (KSh)": valid_data.median(),
-                    "Mean Income (KSh)": valid_data.mean(),
-                })
-
-    if income_age_data:
-        income_age_df = pd.DataFrame(income_age_data)
-        chart = alt.Chart(income_age_df).mark_bar().encode(
-            x="Age Group:N",
-            y="Median Income (KSh):Q",
-            color="Age Group:N",
-            tooltip=["Age Group", "Median Income (KSh)", "Mean Income (KSh)"]
-        ).properties(title="Median Income per Tree by Age Group", height=380)
-        st.altair_chart(chart, use_container_width=True)
-    else:
-        st.info("Income per tree by age group data not available")
-
-    # Grade distribution
+    # ==========================================================
+    # GRADE DISTRIBUTION
+    # ==========================================================
     st.markdown("---")
     st.markdown("### 📊 Grade Distribution")
+    
     if "grade1_share_last" in d.columns:
         grade1_vals = _safe_num(d, "grade1_share_last")
         grade2_vals = _safe_num(d, "grade2_share_last") if "grade2_share_last" in d.columns else pd.Series([0] * len(d))
@@ -709,26 +820,50 @@ def show_productivity_efficiency(df: pd.DataFrame):
         grade1_mean = grade1_vals.mean()
         grade2_mean = grade2_vals.mean()
         
-        grade_data = {
-            "Grade": ["Grade 1", "Grade 2 (Own Use)"],
-            "Percentage": [grade1_mean, grade2_mean],
-        }
-        grade_df = pd.DataFrame(grade_data)
-
-        chart = alt.Chart(grade_df).mark_bar().encode(
-            x="Grade:N",
-            y="Percentage:Q",
-            color="Grade:N",
-            tooltip=["Grade", "Percentage"]
-        ).properties(title="Average Grade Distribution (Last Season)", height=300)
-        st.altair_chart(chart, use_container_width=True)
-
-        # Grade completeness validation
-        completeness = grade1_mean + grade2_mean
-        if abs(completeness - 100) > 10:
-            st.warning(f"⚠️ Grade data may be inconsistent (Grade 1 + Grade 2 = {completeness:.1f}%)")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            grade_data = {
+                "Grade": ["Grade 1", "Grade 2 (Own Use)"],
+                "Percentage": [grade1_mean, grade2_mean],
+            }
+            grade_df = pd.DataFrame(grade_data)
+            
+            chart = alt.Chart(grade_df).mark_bar().encode(
+                x="Grade:N",
+                y="Percentage:Q",
+                color="Grade:N",
+                tooltip=["Grade", "Percentage"]
+            ).properties(title="Average Grade Distribution (Last Season)", height=300)
+            st.altair_chart(chart, use_container_width=True)
+        
+        with col2:
+            # Grade completeness validation
+            completeness = grade1_mean + grade2_mean
+            if abs(completeness - 100) > 10:
+                st.warning(f"⚠️ Grade data may be inconsistent (Grade 1 + Grade 2 = {completeness:.1f}%)")
+            else:
+                st.success(f"✅ Grade data is consistent (Grade 1 + Grade 2 = {completeness:.1f}%)")
+            
+            # Show distribution of Grade 1 shares
+            if not grade1_vals.empty:
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.hist(grade1_vals.dropna(), bins=20, color='#2ecc71', edgecolor='black', alpha=0.7)
+                ax.set_xlabel('Grade 1 Share (%)')
+                ax.set_ylabel('Number of Farms')
+                ax.set_title('Distribution of Grade 1 Share')
+                ax.axvline(grade1_mean, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {grade1_mean:.1f}%')
+                ax.legend()
+                st.pyplot(fig)
     else:
         st.info("Grade distribution data not available")
+
+    # ==========================================================
+    # INCOME POTENTIAL FORECAST (no nested expander)
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 📈 Income Potential Forecast")
+    show_income_potential_forecast(d)
 
 
 def show_enhanced_compliance(df: pd.DataFrame):
@@ -1079,7 +1214,7 @@ def executive_insights(df: pd.DataFrame) -> dict:
 
 
 # ==========================================================
-# Dashboard sections (preserved and enhanced)
+# Dashboard sections 
 # ==========================================================
 def show_overview(df: pd.DataFrame, metrics_df: pd.DataFrame | None = None):
     """Enhanced overview with farmer profile metrics."""
@@ -1088,60 +1223,24 @@ def show_overview(df: pd.DataFrame, metrics_df: pd.DataFrame | None = None):
 
     # First row: core metrics
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Farmers", int(len(d)))
+    
+    with c1:
+        total_farmers = int(len(d))
+        st.metric("Total Farmers", f"{total_farmers:,}")
 
-    total_area = float(_safe_num(d, CAN["area"]).fillna(0).sum()) if CAN["area"] in d.columns else 0.0
-    c2.metric("Total Area (Acres)", f"{total_area:,.2f}")
+    with c2:
+        total_area = float(_safe_num(d, CAN["area"]).fillna(0).sum()) if CAN["area"] in d.columns else 0.0
+        st.metric("Total Area (Acres)", f"{total_area:,.2f}")
 
-    total_trees = float(_safe_num(d, CAN["trees"]).fillna(0).sum()) if CAN["trees"] in d.columns else 0.0
-    c3.metric("Total Trees", f"{total_trees:,.0f}")
+    with c3:
+        total_trees = float(_safe_num(d, CAN["trees"]).fillna(0).sum()) if CAN["trees"] in d.columns else 0.0
+        st.metric("Total Trees", f"{total_trees:,.0f}")
 
-    china_ok = int(_safe_bool(d, CAN["gacc"]).sum()) if CAN["gacc"] in d.columns else 0
-    c4.metric("China-Approved Farms (GACC)", china_ok)
+    with c4:
+        china_ok = int(_safe_bool(d, CAN["gacc"]).sum()) if CAN["gacc"] in d.columns else 0
+        st.metric("China-Approved Farms (GACC)", f"{china_ok:,}")
 
-    # Second row: farmer profile metrics
-    st.markdown("---")
-    st.markdown("**👥 Farmer Profile**")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if CAN["gender"] in d.columns:
-            gender_series = _safe_str(d, CAN["gender"]).str.lower()
-            female = int(gender_series.eq("female").sum())
-            male = int(gender_series.eq("male").sum())
-            st.metric("👩 Female Farmers", f"{female} ({female/len(d)*100:.0f}%)" if len(d) > 0 else "N/A")
-        else:
-            st.caption("Gender data not available")
-
-    with col2:
-        if CAN["age"] in d.columns:
-            ages = _safe_num(d, CAN["age"]).dropna()
-            avg_age = ages.mean()
-            st.metric("📊 Avg. Farmer Age", f"{avg_age:.0f} years" if not pd.isna(avg_age) else "N/A")
-        else:
-            st.caption("Age data not available")
-
-    with col3:
-        if CAN["education"] in d.columns:
-            edu = _safe_str(d, CAN["education"])
-            edu_counts = edu[edu != ""].value_counts()
-            if not edu_counts.empty:
-                top_edu = edu_counts.index[0]
-                st.metric("🎓 Most Common Education", top_edu[:20])
-            else:
-                st.caption("Education data not available")
-        else:
-            st.caption("Education data not available")
-
-    with col4:
-        if CAN["experience"] in d.columns:
-            exp_years = _safe_num(d, CAN["experience"]).dropna()
-            avg_exp = exp_years.mean()
-            st.metric("🌱 Avg. Experience", f"{avg_exp:.1f} years" if not pd.isna(avg_exp) else "N/A")
-        else:
-            st.caption("Experience data not available")
-
-    # Third row: farm size classification
+    # Farm size classification
     st.markdown("---")
     st.markdown("**🏠 Farm Size Classification**")
     col1, col2, col3, col4 = st.columns(4)
@@ -1152,17 +1251,16 @@ def show_overview(df: pd.DataFrame, metrics_df: pd.DataFrame | None = None):
         medium = sum((acres > 3) & (acres <= 10))
         large = sum(acres > 10)
         
-        col1.metric("🏡 Micro-Small (≤3 acres)", f"{micro_small} ({micro_small/len(d)*100:.0f}%)")
-        col2.metric("🏠 Medium (4-10 acres)", f"{medium} ({medium/len(d)*100:.0f}%)")
-        col3.metric("🏢 Large (>10 acres)", f"{large} ({large/len(d)*100:.0f}%)")
+        col1.metric("🏡 Micro-Small (≤3 acres)", f"{micro_small:,} ({micro_small/len(d)*100:.0f}%)")
+        col2.metric("🏠 Medium (4-10 acres)", f"{medium:,} ({medium/len(d)*100:.0f}%)")
+        col3.metric("🏢 Large (>10 acres)", f"{large:,} ({large/len(d)*100:.0f}%)")
         
         # Orchard group registration
         if CAN["orchard_group"] in d.columns:
             group_reg = int(_safe_bool(d, CAN["orchard_group"]).sum())
-            col4.metric("🤝 Registered in Farmer Group", f"{group_reg} ({group_reg/len(d)*100:.0f}%)")
+            col4.metric("🤝 Registered in Farmer Group", f"{group_reg:,} ({group_reg/len(d)*100:.0f}%)")
     else:
         st.caption("Farm size data not available for classification")
-
 
 def show_geospatial(df: pd.DataFrame):
     st.subheader("Farm Locations")
@@ -1174,21 +1272,21 @@ def show_geospatial(df: pd.DataFrame):
 
 
 def show_certification(df: pd.DataFrame):
-    """Enhanced certification with compliance details."""
+    """Enhanced certification with compliance details and GACC county distribution."""
     st.subheader("Certification & Compliance Status")
 
+    d = _ensure_derived(df)
+    n = max(len(d), 1)
+
+    # ==========================================================
+    # China Market Requirements Checklist (updated with Enhanced Compliance)
+    # ==========================================================
+    st.markdown("### 🇨🇳 China Market Requirements Checklist")
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
-        chart = create_certification_chart(df)
-        if chart:
-            st.altair_chart(chart, use_container_width=True)
-        else:
-            st.warning("No certification/compliance data available in this dataset.")
-
-    with col2:
-        st.markdown("**🇨🇳 China Market Requirements Checklist**")
-
+        # Standard compliance metrics
         checks = [
             ("KEPHIS registration", CAN["kephis"]),
             ("GACC approval", CAN["gacc"]),
@@ -1196,33 +1294,125 @@ def show_certification(df: pd.DataFrame):
             ("Sanitation records", CAN["sanitation"]),
             ("Approved pesticide use", CAN["approved_pesticides"]),
         ]
-
-        d = _ensure_derived(df)
-        n = max(len(d), 1)
-
-        for label, col in checks:
-            if col not in d.columns:
-                st.caption(f"• {label}: (data not available)")
-                continue
-
-            compliant = int(_safe_bool(d, col).sum())
-            st.progress(compliant / n, text=f"{label}: {compliant}/{n} farms")
-
-    # Expandable compliance details
-    with st.expander("📋 Detailed Compliance Metrics"):
-        d = _ensure_derived(df)
         
-        # SPS Training
+        for label, col in checks:
+            if col in d.columns:
+                compliant = int(_safe_bool(d, col).sum())
+                st.progress(compliant / n, text=f"{label}: {compliant}/{n} farms")
+            else:
+                st.caption(f"• {label}: (data not available)")
+    
+    with col2:
+        # Enhanced compliance metrics (from the new section)
+        enhanced_checks = [
+            ("Prompt Dropped Fruits Elimination", CAN["dropped_fruits_elimination"]),
+            ("Pruning Practices", CAN["pruning_practices"]),
+            ("Certification Compliance Training", CAN["cert_compliance_training"]),
+            ("IPM Implementation", CAN["ipm_use"]),
+            ("Biological Control", CAN["biological_control"]),
+        ]
+        
+        for label, col in enhanced_checks:
+            if col in d.columns:
+                compliant = int(_safe_bool(d, col).sum())
+                if compliant > 0:  # Only show if there are any farms
+                    st.progress(compliant / n, text=f"{label}: {compliant}/{n} farms")
+                else:
+                    st.caption(f"• {label}: 0 farms (data available)")
+            else:
+                st.caption(f"• {label}: (data not available)")
+
+    # ==========================================================
+    # GACC Progress Tracking (moved here)
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 🌐 GACC Progress Tracking")
+    
+    # Get GACC approved farms
+    gacc_approved = int(_safe_bool(d, CAN["gacc"]).sum()) if CAN["gacc"] in d.columns else 0
+    
+    # KEPHIS reference data (target: 270 total coded farms)
+    kephis_total = 270  # Total KEPHIS-China coded farms in Kenya
+    new_inspected = 41  # Newly inspected farms (from document)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("SHAPe GACC Approved Farms", f"{gacc_approved}", help="Farms in SHAPe program with GACC approval")
+    
+    with col2:
+        st.metric("KEPHIS-China Coded Farms (Kenya)", f"{kephis_total}", help="Total KEPHIS-China coded farms in Kenya (reference)")
+    
+    with col3:
+        st.metric("Newly Inspected Farms", f"{new_inspected}", help="Newly inspected farms for GACC compliance")
+    
+    with col4:
+        pct_of_total = (gacc_approved / kephis_total * 100) if kephis_total > 0 else 0
+        st.metric("SHAPe % of Total", f"{pct_of_total:.1f}%", help="SHAPe farms as percentage of all KEPHIS-China coded farms")
+    
+    # Progress bar
+    st.progress(gacc_approved / kephis_total if kephis_total > 0 else 0, 
+                text=f"{gacc_approved} of {kephis_total} KEPHIS-China coded farms")
+    
+    st.info(f"📋 **Newly Inspected Farms:** {new_inspected} farms have been newly inspected for GACC compliance. These will be added to the registry upon final approval.")
+    
+    # ==========================================================
+    # GACC Distribution by County (NEW)
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 📍 GACC Approved Farms by County")
+    
+    if CAN["gacc"] in d.columns and CAN["county"] in d.columns:
+        gacc_farms = d[_safe_bool(d, CAN["gacc"])]
+        if not gacc_farms.empty:
+            gacc_by_county = gacc_farms[CAN["county"]].value_counts().reset_index()
+            gacc_by_county.columns = ["County", "GACC Approved Farms"]
+            
+            if not gacc_by_county.empty:
+                chart = alt.Chart(gacc_by_county).mark_bar().encode(
+                    x=alt.X("County:N", sort="-y", title="County"),
+                    y=alt.Y("GACC Approved Farms:Q", title="Number of GACC Approved Farms"),
+                    color="County:N",
+                    tooltip=["County", "GACC Approved Farms"]
+                ).properties(title="Distribution of GACC Approved Farms Across Counties", height=400)
+                st.altair_chart(chart, use_container_width=True)
+                
+                # Show summary table
+                with st.expander("View GACC by County Details"):
+                    st.dataframe(gacc_by_county, use_container_width=True)
+            else:
+                st.info("No GACC approved farms found with county information")
+        else:
+            st.info("No GACC approved farms to display")
+    else:
+        st.caption("GACC or county data not available for distribution analysis")
+
+    # ==========================================================
+    # Certification Chart (GlobalGAP, Organic, FairTrade)
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 📜 Other Certifications")
+    
+    chart = create_certification_chart(df)
+    if chart:
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.caption("No certification data available")
+
+    # ==========================================================
+    # SPS Training (keeping this as it has meaningful data)
+    # ==========================================================
+    st.markdown("---")
+    st.markdown("### 📚 Training & Compliance Details")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
         if CAN["sps_training"] in d.columns:
             sps_trained = int(_safe_bool(d, CAN["sps_training"]).sum())
             st.metric("SPS Training Received", f"{sps_trained}/{len(d)} farms ({sps_trained/len(d)*100:.0f}%)")
-        
-        # Training in last year
-        if CAN["training_last_year"] in d.columns:
-            trained_last_year = int(_safe_bool(d, CAN["training_last_year"]).sum())
-            st.metric("Trained in Last Year", f"{trained_last_year} farms")
-        
-        # Training provider
+    
+    with col2:
         if CAN["training_provider"] in d.columns:
             provider = _safe_str(d, CAN["training_provider"])
             provider = provider[provider != ""]
@@ -1231,52 +1421,117 @@ def show_certification(df: pd.DataFrame):
                 provider_counts = provider.value_counts().head(3)
                 for prov, count in provider_counts.items():
                     st.write(f"- {prov}: {count} farms")
-        
-        # Record keeping
-        if CAN["record_keeping"] in d.columns:
-            record_keepers = int(_safe_bool(d, CAN["record_keeping"]).sum())
-            st.metric("Maintain Farm Records", f"{record_keepers} farms")
-        
-        # IPM implementation
-        if CAN["ipm_use"] in d.columns:
-            ipm_users = int(_safe_bool(d, CAN["ipm_use"]).sum())
-            st.metric("IPM Implemented", f"{ipm_users}/{len(d)} farms ({ipm_users/len(d)*100:.0f}%)")
-        
-        # Biological control
-        if CAN["biological_control"] in d.columns:
-            bio_users = int(_safe_bool(d, CAN["biological_control"]).sum())
-            st.metric("Biological Control Used", f"{bio_users} farms")
+    
+    # IPM implementation (already shown above but keeping for completeness)
+    if CAN["ipm_use"] in d.columns:
+        ipm_users = int(_safe_bool(d, CAN["ipm_use"]).sum())
+        if ipm_users > 0:
+            st.caption(f"IPM Implemented: {ipm_users}/{len(d)} farms ({ipm_users/len(d)*100:.0f}%)")
 
 
 def show_production_metrics(df: pd.DataFrame):
-    """Enhanced production metrics with detailed inputs."""
+    """Production metrics with reordered tabs: Yields, Losses, Inputs."""
     st.subheader("Production Metrics")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Yields", "Inputs", "Losses", "Productivity Analysis"])
+    # Reordered tabs: Yields first, then Losses, then Inputs
+    tab1, tab2, tab3 = st.tabs(["🌾 Yields", "📉 Losses", "🌱 Inputs"])
 
     with tab1:
+        # Yields tab - Fruits per tree comparison
+        st.markdown("**Fruits per Tree - Actual vs Expected**")
         chart = create_yield_comparison_chart(df)
         if chart:
             st.altair_chart(chart, use_container_width=True)
         else:
             st.warning("No fruits-per-tree yield fields detected in the canonical schema.")
+        
+        st.markdown("---")
+        st.markdown("**Total Harvest**")
+        d = _ensure_derived(df)
+        
+        # Total harvest metrics
+        if CAN["harvest_kg"] in d.columns:
+            total_harvest = _safe_num(d, CAN["harvest_kg"]).sum()
+            avg_harvest = _safe_num(d, CAN["harvest_kg"]).mean()
+            st.metric("Total Harvest (Last Season)", f"{total_harvest:,.0f} kg")
+            st.metric("Avg Harvest per Farm", f"{avg_harvest:,.0f} kg")
+        else:
+            st.caption("Harvest data not available")
+        
+        # Hass variety adoption
+        if "variety_hass" in d.columns:
+            hass_count = int(_safe_bool(d, "variety_hass").sum())
+            st.metric("Hass Variety Farmers", f"{hass_count}/{len(d)} ({hass_count/len(d)*100:.0f}%)")
+        
+        # Yield per tree by age group
+        st.markdown("---")
+        st.markdown("**Yield per Tree by Age Group**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if CAN["fruits_0_3"] in d.columns:
+                fruits_0_3 = _safe_num(d, CAN["fruits_0_3"]).mean()
+                st.metric("Fruits/Tree (0-3 years)", f"{fruits_0_3:.0f}" if not pd.isna(fruits_0_3) else "N/A")
+        with col2:
+            if CAN["fruits_4_7"] in d.columns:
+                fruits_4_7 = _safe_num(d, CAN["fruits_4_7"]).mean()
+                st.metric("Fruits/Tree (4-7 years)", f"{fruits_4_7:.0f}" if not pd.isna(fruits_4_7) else "N/A")
+        with col3:
+            if CAN["fruits_8_plus"] in d.columns:
+                fruits_8_plus = _safe_num(d, CAN["fruits_8_plus"]).mean()
+                st.metric("Fruits/Tree (8+ years)", f"{fruits_8_plus:.0f}" if not pd.isna(fruits_8_plus) else "N/A")
 
     with tab2:
+        # Losses tab
         d = _ensure_derived(df)
+        st.markdown("**Loss Analysis**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if CAN["harvest_losses"] in d.columns and CAN["harvest_kg"] in d.columns:
+                losses = _safe_num(d, CAN["harvest_losses"]).sum()
+                harvest = _safe_num(d, CAN["harvest_kg"]).sum()
+                if harvest > 0:
+                    loss_pct = (losses / harvest) * 100
+                    st.metric("Total Loss Rate", f"{loss_pct:.1f}%")
+                    st.metric("Total Losses (kg)", f"{losses:,.0f} kg")
+            else:
+                st.caption("Loss data not available")
+        
+        with col2:
+            if CAN["loss_causes"] in d.columns:
+                causes = _safe_str(d, CAN["loss_causes"])
+                causes = causes[causes != ""]
+                if not causes.empty:
+                    cause_counts = causes.value_counts().reset_index()
+                    cause_counts.columns = ["Cause", "Count"]
+                    chart = alt.Chart(cause_counts).mark_bar().encode(
+                        x="Count:Q", y="Cause:N", color="Cause:N"
+                    ).properties(title="Primary Causes of Loss", height=300)
+                    st.altair_chart(chart, use_container_width=True)
+            else:
+                st.caption("Loss causes data not available")
+
+    with tab3:
+        # Inputs tab (formerly tab2)
+        d = _ensure_derived(df)
+        
         st.markdown("**Fertilizer Usage**")
         
         col1, col2 = st.columns(2)
         with col1:
             if CAN["fertilizer_organic"] in d.columns:
                 organic = int(_safe_bool(d, CAN["fertilizer_organic"]).sum())
-                st.metric("Organic Fertilizer Users", f"{organic} farms")
+                st.metric("Organic Fertilizer Users", f"{organic} farms ({organic/len(d)*100:.0f}%)")
             else:
                 st.caption("Organic fertilizer data not available")
         
         with col2:
             if CAN["fertilizer_inorganic"] in d.columns:
                 inorganic = int(_safe_bool(d, CAN["fertilizer_inorganic"]).sum())
-                st.metric("Inorganic Fertilizer Users", f"{inorganic} farms")
+                st.metric("Inorganic Fertilizer Users", f"{inorganic} farms ({inorganic/len(d)*100:.0f}%)")
+            else:
+                st.caption("Inorganic fertilizer data not available")
         
         # Fertilizer quantity
         if CAN["fertilizer_quantity"] in d.columns:
@@ -1319,67 +1574,9 @@ def show_production_metrics(df: pd.DataFrame):
         else:
             st.caption("Irrigation data not available")
 
-    with tab3:
-        d = _ensure_derived(df)
-        st.markdown("**Loss Analysis**")
-        
-        # FIXED: Use the correct CAN key "harvest_losses"
-        if CAN["harvest_losses"] in d.columns and CAN["harvest_kg"] in d.columns:
-            losses = _safe_num(d, CAN["harvest_losses"]).sum()
-            harvest = _safe_num(d, CAN["harvest_kg"]).sum()
-            if harvest > 0:
-                loss_pct = (losses / harvest) * 100
-                st.metric("Total Loss Rate", f"{loss_pct:.1f}%")
-        else:
-            st.caption("Loss data not available")
-        
-        if CAN["loss_causes"] in d.columns:
-            causes = _safe_str(d, CAN["loss_causes"])
-            causes = causes[causes != ""]
-            if not causes.empty:
-                cause_counts = causes.value_counts().reset_index()
-                cause_counts.columns = ["Cause", "Count"]
-                chart = alt.Chart(cause_counts).mark_bar().encode(
-                    x="Count:Q", y="Cause:N", color="Cause:N"
-                ).properties(title="Primary Causes of Loss", height=300)
-                st.altair_chart(chart, use_container_width=True)
-        else:
-            st.caption("Loss causes data not available")
-
-    with tab4:
-        d = _ensure_derived(df)
-        st.markdown("**📈 Productivity Analysis**")
-        
-        # Hass variety adoption
-        if "variety_hass" in d.columns:
-            hass_count = int(_safe_bool(d, "variety_hass").sum())
-            st.metric("Hass Variety Farmers", f"{hass_count}/{len(d)} ({hass_count/len(d)*100:.0f}%)")
-        
-        # Total harvest
-        if CAN["harvest_kg"] in d.columns:
-            total_harvest = _safe_num(d, CAN["harvest_kg"]).sum()
-            avg_harvest = _safe_num(d, CAN["harvest_kg"]).mean()
-            st.metric("Total Harvest (Last Season)", f"{total_harvest:,.0f} kg")
-            st.metric("Avg Harvest per Farm", f"{avg_harvest:,.0f} kg")
-        
-        # Yield per tree by age group
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if CAN["fruits_0_3"] in d.columns:
-                fruits_0_3 = _safe_num(d, CAN["fruits_0_3"]).mean()
-                st.metric("Fruits/Tree (0-3 years)", f"{fruits_0_3:.0f}" if not pd.isna(fruits_0_3) else "N/A")
-        with col2:
-            if CAN["fruits_4_7"] in d.columns:
-                fruits_4_7 = _safe_num(d, CAN["fruits_4_7"]).mean()
-                st.metric("Fruits/Tree (4-7 years)", f"{fruits_4_7:.0f}" if not pd.isna(fruits_4_7) else "N/A")
-        with col3:
-            if CAN["fruits_8_plus"] in d.columns:
-                fruits_8_plus = _safe_num(d, CAN["fruits_8_plus"]).mean()
-                st.metric("Fruits/Tree (8+ years)", f"{fruits_8_plus:.0f}" if not pd.isna(fruits_8_plus) else "N/A")
-
 
 def show_market_analysis(df: pd.DataFrame):
-    """Enhanced market analysis with grade share and current prices."""
+    """Enhanced market analysis with fixed price outliers, updated labels, and merged constraints."""
     st.subheader("Market Analysis")
     d = _ensure_derived(df)
 
@@ -1424,9 +1621,10 @@ def show_market_analysis(df: pd.DataFrame):
                 if max_val <= 1:
                     grade_share = grade_share * 100
                     st.caption("ℹ️ Values converted from decimal (0-1) to percentage")
-                # If values are > 100, they might be already in percentage but with outliers
+                # If values are > 100, cap at 100 for display
                 elif max_val > 100:
-                    st.caption("⚠️ Some values exceed 100% - possible data quality issues")
+                    grade_share = grade_share.clip(upper=100)
+                    st.caption("⚠️ Values exceeding 100% have been capped")
                 
                 # Remove extreme outliers for better display
                 if len(grade_share) > 10:
@@ -1438,10 +1636,12 @@ def show_market_analysis(df: pd.DataFrame):
                 # Grade distribution chart
                 grade_data = grade_share
                 fig, ax = plt.subplots(figsize=(10, 4))
-                ax.hist(grade_data, bins=20, color='#2ecc71', edgecolor='black')
+                ax.hist(grade_data, bins=20, color='#2ecc71', edgecolor='black', alpha=0.7)
                 ax.set_xlabel('Grade 1 Share (%)')
                 ax.set_ylabel('Number of Farmers')
                 ax.set_title('Distribution of Grade 1 Share')
+                ax.axvline(grade_share.mean(), color='red', linestyle='dashed', linewidth=2, label=f'Mean: {grade_share.mean():.1f}%')
+                ax.legend()
                 st.pyplot(fig)
             else:
                 st.caption("Grade 1 share data not available")
@@ -1450,82 +1650,165 @@ def show_market_analysis(df: pd.DataFrame):
     
     st.markdown("---")
     
-    # Price comparison: last season vs current season
+    # Price comparison: 2024 Main Season vs 2025 Main Season (updated labels)
     col3, col4 = st.columns(2)
     
     with col3:
-        st.markdown("**💰 Hass Prices (Last Season)**")
+        st.markdown("**💰 Hass Prices - 2024 Main Season**")
         if CAN["price_hass"] in d.columns:
             prices = _safe_num(d, CAN["price_hass"]).dropna()
-            # Remove extreme outliers for better display
-            if len(prices) > 10:
-                q99 = prices.quantile(0.99)
-                prices = prices[prices <= q99]
+            # Remove extreme outliers - keep realistic range (20-200 KSh/kg)
+            prices = prices[(prices >= 20) & (prices <= 200)]
             if not prices.empty:
+                # Calculate median and mean, but median is more reliable
                 st.metric("Average Price", f"KSh {prices.mean():.2f}/kg")
-                st.metric("Median Price", f"KSh {prices.median():.2f}/kg")
+                st.metric("Median Price", f"KSh {prices.median():.2f}/kg", help="Median is more reliable for price data")
+                
+                # Price distribution chart
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.hist(prices, bins=20, color='#3498db', edgecolor='black', alpha=0.7)
+                ax.set_xlabel('Price (KSh/kg)')
+                ax.set_ylabel('Number of Farms')
+                ax.set_title('Distribution of Hass Prices - 2024 Main Season')
+                ax.axvline(prices.median(), color='red', linestyle='dashed', linewidth=2, label=f'Median: KSh {prices.median():.2f}')
+                ax.legend()
+                st.pyplot(fig)
             else:
-                st.caption("Price data not available")
+                st.caption("Price data not available for 2024 season")
         else:
-            st.caption("Price data not available")
+            st.caption("Price data not available for 2024 season")
     
     with col4:
-        st.markdown("**💰 Hass Prices (Current Season)**")
+        st.markdown("**💰 Hass Prices - 2025 Main Season**")
         if CAN["price_hass_current"] in d.columns:
             current_prices = _safe_num(d, CAN["price_hass_current"]).dropna()
-            # Remove extreme outliers for better display
-            if len(current_prices) > 10:
-                q99 = current_prices.quantile(0.99)
-                current_prices = current_prices[current_prices <= q99]
+            # Remove extreme outliers - keep realistic range (20-200 KSh/kg)
+            current_prices = current_prices[(current_prices >= 20) & (current_prices <= 200)]
             if not current_prices.empty:
                 st.metric("Average Price", f"KSh {current_prices.mean():.2f}/kg")
-                st.metric("Median Price", f"KSh {current_prices.median():.2f}/kg")
+                st.metric("Median Price", f"KSh {current_prices.median():.2f}/kg", help="Median is more reliable for price data")
+                
+                # Price distribution chart
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.hist(current_prices, bins=20, color='#e74c3c', edgecolor='black', alpha=0.7)
+                ax.set_xlabel('Price (KSh/kg)')
+                ax.set_ylabel('Number of Farms')
+                ax.set_title('Distribution of Hass Prices - 2025 Main Season')
+                ax.axvline(current_prices.median(), color='red', linestyle='dashed', linewidth=2, label=f'Median: KSh {current_prices.median():.2f}')
+                ax.legend()
+                st.pyplot(fig)
             else:
-                st.caption("Current season price data not available")
+                st.caption("Price data not available for 2025 season")
         else:
-            st.caption("Current season price data not available")
+            st.caption("Price data not available for 2025 season")
     
-    # Market constraints expandable
+    # Market constraints - MERGED similar responses
     if CAN["market_constraints"] in d.columns:
-        with st.expander("🚧 Market Access Challenges"):
-            constraints = _safe_str(d, CAN["market_constraints"])
-            constraints = constraints[constraints != ""]
-            if not constraints.empty:
-                constraint_counts = constraints.value_counts().reset_index()
-                constraint_counts.columns = ["Constraint", "Count"]
+        st.markdown("---")
+        st.markdown("### 🚧 Market Access Challenges")
+        
+        constraints = _safe_str(d, CAN["market_constraints"])
+        constraints = constraints[constraints != ""]
+        if not constraints.empty:
+            # Merge similar responses
+            def merge_constraint(text):
+                text_lower = text.lower()
+                if "price" in text_lower or "fluctuation" in text_lower:
+                    return "Price Fluctuations"
+                elif "buyer" in text_lower or "market" in text_lower:
+                    return "Limited Buyers / Market Access"
+                elif "quality" in text_lower or "standard" in text_lower:
+                    return "Quality Standards"
+                elif "transport" in text_lower or "logistic" in text_lower:
+                    return "Transport / Logistics"
+                elif "payment" in text_lower or "late payment" in text_lower:
+                    return "Late Payment / Cash Flow"
+                elif "competition" in text_lower:
+                    return "High Competition"
+                else:
+                    return text.title()
+            
+            merged_constraints = constraints.apply(merge_constraint)
+            constraint_counts = merged_constraints.value_counts().reset_index()
+            constraint_counts.columns = ["Constraint", "Count"]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Bar chart for merged constraints
                 chart = alt.Chart(constraint_counts).mark_bar().encode(
-                    x="Count:Q", y="Constraint:N", color="Constraint:N"
-                ).properties(height=250)
+                    x=alt.X("Count:Q", title="Number of Farms"),
+                    y=alt.Y("Constraint:N", sort="-x", title="Market Challenge"),
+                    color="Constraint:N",
+                    tooltip=["Constraint", "Count"]
+                ).properties(title="Market Access Challenges (Merged)", height=300)
                 st.altair_chart(chart, use_container_width=True)
+            
+            with col2:
+                # Show original responses in a dataframe (no expander)
+                st.markdown("**Original Responses (Top 10):**")
+                original_counts = constraints.value_counts().reset_index().head(10)
+                original_counts.columns = ["Original Response", "Count"]
+                st.dataframe(original_counts, use_container_width=True)
+        else:
+            st.caption("No market constraint data available")
 
 
 def show_training_needs(df: pd.DataFrame):
-    """Enhanced training needs with extension access."""
+    """Enhanced training needs with merged similar responses and extension access."""
     st.subheader("Training & Extension Needs")
     d = _ensure_derived(df)
 
     col1, col2 = st.columns(2)
 
     with col1:
+        st.markdown("**Most Pressing Training Needs**")
+        
         # Option A: already summarized (canonical export sheet may carry this)
         if "Top_Training_Need" in d.columns:
             s = _safe_str(d, "Top_Training_Need")
             s = s[s != ""]
             if not s.empty:
-                c = s.value_counts().reset_index()
+                # Merge similar training needs
+                def merge_training_need(text):
+                    text_lower = text.lower()
+                    if "gap" in text_lower or "good agricultural" in text_lower:
+                        return "Good Agricultural Practices (GAP)"
+                    elif "post" in text_lower or "harvest" in text_lower:
+                        return "Post-Harvest Management"
+                    elif "certif" in text_lower or "compliance" in text_lower:
+                        return "Certification & Compliance"
+                    elif "market" in text_lower or "access" in text_lower:
+                        return "Market Access"
+                    elif "ipm" in text_lower or "pest" in text_lower or "disease" in text_lower:
+                        return "Pest & Disease Management (IPM)"
+                    elif "finance" in text_lower or "record" in text_lower:
+                        return "Financial Management & Record Keeping"
+                    elif "irrigation" in text_lower or "water" in text_lower:
+                        return "Water Management & Irrigation"
+                    else:
+                        return text.title()
+                
+                merged_needs = s.apply(merge_training_need)
+                c = merged_needs.value_counts().reset_index()
                 c.columns = ["Need", "Count"]
+                
                 chart = (
                     alt.Chart(c)
                     .mark_bar()
                     .encode(
-                        x=alt.X("Count:Q", title="Count"),
-                        y=alt.Y("Need:N", sort="-x"),
+                        x=alt.X("Count:Q", title="Number of Farms"),
+                        y=alt.Y("Need:N", sort="-x", title="Training Need"),
                         color="Need:N",
                         tooltip=["Need", "Count"],
                     )
-                    .properties(title="Most Pressing Training Needs", height=380)
+                    .properties(title="Most Pressing Training Needs (Merged)", height=380)
                 )
                 st.altair_chart(chart, use_container_width=True)
+                
+                # Show original responses in expander
+                with st.expander("View original training needs responses"):
+                    st.dataframe(s.value_counts().reset_index().rename(columns={"index": "Original Response", "Need": "Count"}), use_container_width=True)
                 return
 
         # Option B: canonical one-hots derived from raw
@@ -1564,19 +1847,39 @@ def show_training_needs(df: pd.DataFrame):
             ext_access = _safe_str(d, CAN["extension_access"])
             ext_access = ext_access[ext_access != ""]
             if not ext_access.empty:
-                ext_counts = ext_access.value_counts().reset_index()
+                # Merge similar extension access responses
+                def merge_extension(text):
+                    text_lower = text.lower()
+                    if "government" in text_lower or "gov" in text_lower:
+                        return "Government"
+                    elif "private" in text_lower:
+                        return "Private Sector"
+                    elif "cooperative" in text_lower or "co-op" in text_lower or "ngo" in text_lower:
+                        return "Cooperative / NGO"
+                    elif "none" in text_lower:
+                        return "None"
+                    else:
+                        return text.title()
+                
+                merged_access = ext_access.apply(merge_extension)
+                ext_counts = merged_access.value_counts().reset_index()
                 ext_counts.columns = ["Source", "Count"]
+                
                 chart = (
                     alt.Chart(ext_counts)
                     .mark_arc()
                     .encode(
                         theta=alt.Theta("Count:Q", stack=True),
-                        color=alt.Color("Source:N"),
+                        color=alt.Color("Source:N", scale=alt.Scale(scheme="set2")),
                         tooltip=["Source", "Count"],
                     )
-                    .properties(title="Extension Services Access", height=300)
+                    .properties(title="Extension Services Access (Merged)", height=300)
                 )
                 st.altair_chart(chart, use_container_width=True)
+                
+                # Show original responses in expander
+                with st.expander("View original extension access responses"):
+                    st.dataframe(ext_access.value_counts().reset_index().rename(columns={"index": "Original Response", "ext_access": "Count"}), use_container_width=True)
             else:
                 st.caption("Extension access data not available")
         else:
@@ -1589,17 +1892,40 @@ def show_training_needs(df: pd.DataFrame):
             provider = _safe_str(d, CAN["training_provider"])
             provider = provider[provider != ""]
             if not provider.empty:
-                prov_counts = provider.value_counts().reset_index()
+                # Merge similar training provider responses
+                def merge_provider(text):
+                    text_lower = text.lower()
+                    if "government" in text_lower or "gov" in text_lower:
+                        return "Government"
+                    elif "private" in text_lower:
+                        return "Private Sector"
+                    elif "cooperative" in text_lower or "co-op" in text_lower or "ngo" in text_lower:
+                        return "Cooperative / NGO"
+                    elif "none" in text_lower:
+                        return "None"
+                    else:
+                        return text.title()
+                
+                merged_provider = provider.apply(merge_provider)
+                prov_counts = merged_provider.value_counts().reset_index()
                 prov_counts.columns = ["Provider", "Count"]
+                
                 chart = (
                     alt.Chart(prov_counts)
                     .mark_bar()
                     .encode(
-                        x="Provider:N", y="Count:Q", color="Provider:N"
+                        x="Provider:N",
+                        y="Count:Q",
+                        color="Provider:N",
+                        tooltip=["Provider", "Count"]
                     )
-                    .properties(height=250)
+                    .properties(title="Training Providers (Merged)", height=250)
                 )
                 st.altair_chart(chart, use_container_width=True)
+                
+                # Show original responses in expander
+                with st.expander("View original training provider responses"):
+                    st.dataframe(provider.value_counts().reset_index().rename(columns={"index": "Original Response", "provider": "Count"}), use_container_width=True)
             else:
                 st.caption("Training provider data not available")
         else:
@@ -1607,7 +1933,7 @@ def show_training_needs(df: pd.DataFrame):
 
 
 def show_sustainability(df: pd.DataFrame):
-    """Sustainability practices section with collapsible details."""
+    """Sustainability practices section with collapsible details and visual value chains."""
     st.subheader("🌱 Sustainability Practices")
     d = _ensure_derived(df)
     
@@ -1697,22 +2023,92 @@ def show_sustainability(df: pd.DataFrame):
         else:
             st.caption("Additional trees data not available")
     
+    # ==========================================================
+    # Other Value Chains - VISUAL REPRESENTATION (bar chart + pie chart)
+    # ==========================================================
     st.markdown("---")
-    st.markdown("**🐄 Other Value Chains**")
+    st.markdown("### 🐄 Other Value Chains (Farm Diversification)")
+    
     if CAN["other_value_chains"] in d.columns:
         chains = _safe_str(d, CAN["other_value_chains"])
         chains = chains[chains != ""]
         if not chains.empty:
-            chain_counts = chains.value_counts()
-            # Show top 5 most common
-            st.markdown("**Top 5 Value Chains:**")
-            for chain, count in chain_counts.head(5).items():
-                st.write(f"- {chain}: {count} farms")
+            # Merge similar value chain responses for cleaner visualization
+            def merge_chain(text):
+                text_lower = text.lower()
+                if "dairy" in text_lower:
+                    return "Dairy Farming"
+                elif "poultry" in text_lower:
+                    return "Poultry Farming"
+                elif "crop" in text_lower or "maize" in text_lower or "beans" in text_lower or "vegetable" in text_lower:
+                    return "Crop Farming"
+                elif "horticulture" in text_lower:
+                    return "Horticulture"
+                elif "bee" in text_lower:
+                    return "Beekeeping"
+                elif "fish" in text_lower:
+                    return "Fish Farming"
+                else:
+                    return "Other"
             
-            # Show expander for all value chains
-            with st.expander(f"View all {len(chain_counts)} value chains"):
-                for chain, count in chain_counts.items():
-                    st.write(f"- {chain}: {count} farms")
+            # Apply merging and count
+            merged_chains = chains.apply(merge_chain)
+            chain_counts = merged_chains.value_counts().reset_index()
+            chain_counts.columns = ["Value Chain", "Count"]
+            
+            # Calculate percentages
+            total_farms = len(chains)
+            chain_counts["Percentage"] = (chain_counts["Count"] / total_farms * 100).round(1)
+            
+            # Create two columns for side-by-side charts
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Bar chart for value chains
+                chart = alt.Chart(chain_counts).mark_bar().encode(
+                    x=alt.X("Count:Q", title="Number of Farms"),
+                    y=alt.Y("Value Chain:N", sort="-x", title="Value Chain"),
+                    color="Value Chain:N",
+                    tooltip=["Value Chain", "Count", "Percentage"]
+                ).properties(title="Farm Diversification by Value Chain", height=350)
+                st.altair_chart(chart, use_container_width=True)
+            
+            with col2:
+                # Pie chart for percentage distribution
+                chart2 = alt.Chart(chain_counts).mark_arc().encode(
+                    theta=alt.Theta("Count:Q", stack=True),
+                    color=alt.Color("Value Chain:N", scale=alt.Scale(scheme="set2")),
+                    tooltip=["Value Chain", alt.Tooltip("Count:Q", format=",.0f"), alt.Tooltip("Percentage:Q", format=".1f")]
+                ).properties(title="Value Chain Distribution (%)", height=350)
+                st.altair_chart(chart2, use_container_width=True)
+            
+            # Summary statistics
+            st.markdown("**📊 Diversification Summary**")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                unique_chains = len(chain_counts)
+                st.metric("Unique Value Chains", unique_chains)
+            
+            with col2:
+                farms_with_diversification = total_farms
+                st.metric("Farms with Diversification", f"{farms_with_diversification}")
+            
+            with col3:
+                avg_chains_per_farm = chains.str.split().apply(len).mean()
+                st.metric("Avg. Chains per Farm", f"{avg_chains_per_farm:.1f}")
+            
+            with col4:
+                most_common = chain_counts.iloc[0]["Value Chain"] if not chain_counts.empty else "None"
+                st.metric("Most Common", most_common)
+            
+            # Show detailed table with expander
+            with st.expander("View detailed value chain breakdown"):
+                st.dataframe(chain_counts, use_container_width=True)
+                
+                # Show original responses
+                st.markdown("**Original Responses (Top 20):**")
+                st.dataframe(chains.value_counts().head(20).reset_index().rename(columns={"index": "Original Response", "other_value_chains": "Count"}), use_container_width=True)
         else:
             st.caption("Other value chains data not available")
     else:
